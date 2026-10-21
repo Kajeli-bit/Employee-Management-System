@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Nilric brand purple, sampled from the company profile:
+     700 is the panel purple, 800 the heading purple. */
+  --color-brand-50: #f7f2fb;
+  --color-brand-100: #efe4f8;
+  --color-brand-200: #ddcdf0;
+  --color-brand-300: #c2a5e2;
+  --color-brand-400: #a37cd0;
+  --color-brand-500: #8459b8;
+  --color-brand-600: #6e419e;
+  --color-brand-700: #63358b;
+  --color-brand-800: #4a266a;
+  --color-brand-900: #3a1c53;
+  --color-brand-950: #271136;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid #63358b;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
