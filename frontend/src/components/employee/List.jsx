@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DataTable from "react-data-table-component";
 import axios from "axios";
-import { FaUsers } from "react-icons/fa";
+import { FaCheck, FaChevronDown, FaTimes, FaUsers } from "react-icons/fa";
+import Add from "./Add";
+import Edit from "./Edit";
+import EmployeeDetailsModal from "./EmployeeDetailsModal";
 import { columns } from "../../utils/EmployeeHelper";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
@@ -13,6 +15,155 @@ import {
   roleLabel,
   roleLevel,
 } from "../../utils/roles";
+
+// Listbox dropdown styled like the team attendance department menu.
+const FilterMenu = ({ id, label, value, options, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = options.find((item) => item.id === value) || options[0];
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const choose = (nextId) => {
+    onChange(nextId);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="relative mt-1">
+      <button
+        type="button"
+        id={id}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-2 bg-transparent text-left text-sm font-semibold text-slate-900 outline-none transition hover:text-brand-700"
+      >
+        <span className="truncate">{selected.label}</span>
+        <FaChevronDown
+          className={`shrink-0 text-[10px] text-slate-400 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          aria-label={label}
+          className="absolute left-0 top-full z-30 mt-2 w-max min-w-full max-w-xs rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10"
+        >
+          {options.map((item) => {
+            const isSelected = item.id === selected.id;
+
+            return (
+              <li key={item.id || "all"} role="none">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => choose(item.id)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none transition ${
+                    isSelected
+                      ? "bg-brand-50 font-semibold text-brand-800"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="whitespace-nowrap">{item.label}</span>
+                  {isSelected && (
+                    <FaCheck className="shrink-0 text-[10px] text-brand-700" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const EmployeePopup = ({ title, subtitle, onClose, children }) => {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:left-64"
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-black/40 backdrop-blur-md"
+      />
+      <div className="relative flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-3 sm:px-6">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+              {title}
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close popup"
+            autoFocus
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          >
+            <FaTimes aria-hidden="true" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const List = () => {
   const { user, getToken } = useAuth();
@@ -33,6 +184,16 @@ const List = () => {
   const [totalPages, setTotalPages] = useState(0);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [detailsId, setDetailsId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Stable handlers so the popups' effects don't re-run on every render.
+  const closeAdd = useCallback(() => setShowAdd(false), []);
+  const closeEdit = useCallback(() => setEditId(null), []);
+  const closeDetails = useCallback(() => setDetailsId(null), []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -153,13 +314,9 @@ const List = () => {
             response.data.employees || [];
 
           const data = employeeData.map(
-            (emp, index) => ({
+            (emp) => ({
               _id: emp._id,
               userId: emp.userId,
-              sno:
-                (page - 1) * limit +
-                index +
-                1,
               employeeId:
                 emp.employeeId,
               name: emp.name,
@@ -175,8 +332,6 @@ const List = () => {
                     "en-GB"
                   )
                 : "N/A",
-              salary: emp.salary,
-              phone: emp.phone,
               profileImage:
                 emp.profileImage,
             })
@@ -232,21 +387,20 @@ const List = () => {
     debouncedSearch,
     roleFilter,
     departmentFilter,
+    refreshKey,
   ]);
 
   const handleSearch = (e) => {
     setSearch(e.target.value);
   };
 
-  const handleRoleChange = (e) => {
-    setRoleFilter(e.target.value);
+  const handleRoleChange = (id) => {
+    setRoleFilter(id);
     setPage(1);
   };
 
-  const handleDepartmentChange = (e) => {
-    setDepartmentFilter(
-      e.target.value
-    );
+  const handleDepartmentChange = (id) => {
+    setDepartmentFilter(id);
     setPage(1);
   };
 
@@ -279,7 +433,6 @@ const List = () => {
     CAPABILITIES.PEOPLE_MANAGE
   );
 
-  const displayRole = roleLabel(user?.role) || "User";
   const hasActiveFilters = Boolean(
     search.trim() || roleFilter || departmentFilter
   );
@@ -297,39 +450,17 @@ const List = () => {
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-700 text-xl text-white shadow-sm">
+          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-brand-950">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-800 text-xl text-white">
               <FaUsers aria-hidden="true" />
             </span>
             Employee Management
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Everyone at Nilric, searchable by name, staff ID or email.
-          </p>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                Your role
-              </p>
-              <p className="mt-0.5 text-sm font-semibold text-slate-900">
-                {displayRole}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-right shadow-sm">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                Employees
-              </p>
-              <p className="font-mono text-xl font-semibold tabular-nums text-slate-900">
-                {totalRows}
-              </p>
-            </div>
             {hasActiveFilters && (
-              <div className="rounded-2xl border border-brand-700 bg-brand-700 px-4 py-2 shadow-sm">
-                <p className="text-[11px] uppercase tracking-wide text-brand-200">
-                  Filtered
-                </p>
-                <p className="mt-0.5 max-w-[280px] truncate text-sm font-semibold text-white">
+              <div className="rounded-xl bg-brand-800 px-3.5 py-2 text-white">
+                <p className="max-w-[320px] truncate text-sm font-medium">
                   {[
                     debouncedSearch && `“${debouncedSearch}”`,
                     roleFilter && roleLabel(roleFilter),
@@ -343,27 +474,35 @@ const List = () => {
           </div>
         </div>
 
-        {canAddEmployee && (
-          <Link
-            to="/admin-dashboard/add-employee"
-            className="inline-flex shrink-0 items-center justify-center gap-2 self-end rounded-2xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-          >
-            <span aria-hidden="true" className="text-lg leading-none">
-              +
-            </span>
-            Add Employee
-          </Link>
-        )}
       </div>
 
-        {/* Filters */}
-        <div className="mt-5 shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-12">
-            <label className="relative block min-w-0 sm:col-span-2 lg:col-span-6">
-              <span className="sr-only">Search employees</span>
-              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+        {/* Filters — one bordered strip, same layout as the leave page */}
+        <div className="mt-5 grid shrink-0 grid-cols-1 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white lg:grid-cols-[calc(25%+110px)_repeat(3,minmax(0,1fr))] lg:divide-x lg:divide-y-0">
+          <div className="relative min-w-0 px-5 py-3">
+            <label
+              htmlFor="employee-search"
+              className="block text-[11px] font-medium uppercase tracking-wide text-slate-400"
+            >
+              Search
+            </label>
+            <input
+              id="employee-search"
+              type="text"
+              placeholder="Search by name, ID or email..."
+              value={search}
+              onChange={handleSearch}
+              style={{ outline: "none" }}
+              className="mt-1 w-full min-w-0 bg-transparent pr-6 text-sm font-semibold text-slate-900 placeholder:font-normal placeholder:text-slate-400"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute bottom-3 right-5 text-slate-400 transition hover:text-slate-700"
+              >
                 <svg
-                  className="h-4 w-4 text-slate-400"
+                  className="h-4 w-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -372,126 +511,108 @@ const List = () => {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="2"
-                    d="m21 21-4.35-4.35m2.1-5.4a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"
+                    d="M6 18 18 6M6 6l12 12"
                   />
                 </svg>
-              </span>
-
-              <input
-                type="text"
-                placeholder="Search by name, ID or email..."
-                value={search}
-                onChange={handleSearch}
-                className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-9 pr-9 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition hover:text-slate-700"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M6 18 18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              )}
-            </label>
-
-            <div className="min-w-0 sm:col-span-1 lg:col-span-3">
-              <label className="sr-only" htmlFor="employee-role-filter">
-                Filter by role
-              </label>
-              <select
-                id="employee-role-filter"
-                value={roleFilter}
-                onChange={handleRoleChange}
-                className="h-10 w-full min-w-0 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100"
-              >
-                <option value="">All roles</option>
-
-                {availableRoles.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="min-w-0 sm:col-span-1 lg:col-span-3">
-              <label
-                className="sr-only"
-                htmlFor="employee-department-filter"
-              >
-                Filter by department
-              </label>
-              <select
-                id="employee-department-filter"
-                value={departmentFilter}
-                onChange={handleDepartmentChange}
-                className="h-10 w-full min-w-0 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100"
-              >
-                <option value="">All departments</option>
-
-                {departments.map((department) => (
-                  <option
-                    key={department._id}
-                    value={department._id}
-                  >
-                    {department.dep_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+              </button>
+            )}
           </div>
 
-          {hasActiveFilters && (
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-slate-200 pt-2">
-              <p className="text-[12px] text-slate-500">
-                Showing{" "}
-                <span className="font-semibold text-slate-800">
-                  {employees.length}
-                </span>{" "}
-                of{" "}
-                <span className="font-semibold text-slate-800">
-                  {totalRows}
-                </span>{" "}
-                matching records
-              </p>
+          <div className="min-w-0 px-5 py-3">
+            <label
+              htmlFor="employee-role-filter"
+              className="block text-[11px] font-medium uppercase tracking-wide text-slate-400"
+            >
+              Role
+            </label>
+            <FilterMenu
+              id="employee-role-filter"
+              label="Role"
+              value={roleFilter}
+              onChange={handleRoleChange}
+              options={[
+                { id: "", label: "All roles" },
+                ...availableRoles.map((role) => ({
+                  id: role.value,
+                  label: role.label,
+                })),
+              ]}
+            />
+          </div>
+
+          <div className="min-w-0 px-5 py-3">
+            <label
+              htmlFor="employee-department-filter"
+              className="block text-[11px] font-medium uppercase tracking-wide text-slate-400"
+            >
+              Department
+            </label>
+            <FilterMenu
+              id="employee-department-filter"
+              label="Department"
+              value={departmentFilter}
+              onChange={handleDepartmentChange}
+              options={[
+                { id: "", label: "All departments" },
+                ...departments
+                  .filter((department) => department.kind !== "team")
+                  .map((department) => ({
+                    id: department._id,
+                    label: department.dep_name,
+                  })),
+              ]}
+            />
+          </div>
+
+          {canAddEmployee && (
+            <div className="flex min-w-0 items-center px-3 py-3">
               <button
                 type="button"
-                onClick={clearFilters}
-                className="rounded-lg px-2.5 py-1 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-800"
+                onClick={() => setShowAdd(true)}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
               >
-                Clear all filters
+                <span aria-hidden="true" className="text-lg leading-none">
+                  +
+                </span>
+                Add Employee
               </button>
             </div>
           )}
         </div>
 
+        {hasActiveFilters && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+            <p className="text-[12px] text-slate-500">
+              Showing{" "}
+              <span className="font-semibold text-slate-800">
+                {employees.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-slate-800">
+                {totalRows}
+              </span>{" "}
+              matching records
+            </p>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-lg px-2.5 py-1 text-[12px] font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-800"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
+
         {/* Directory table — compact fixed layout fits without horizontal scrolling */}
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-brand-50/70 to-white px-6 py-4">
             <div>
-              <h2 className="text-sm font-semibold text-slate-800">Staff directory</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Full staff IDs always visible — no horizontal scrolling.
-              </p>
+              <h2 className="text-base font-semibold tracking-tight text-slate-900">Staff directory</h2>
             </div>
             {totalRows > 0 && (
-              <p className="text-[11px] tabular-nums text-slate-400">
+              <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium tabular-nums text-brand-800 ring-1 ring-brand-100">
                 Page {page} of {Math.max(totalPages, 1)}
-              </p>
+              </span>
             )}
           </div>
 
@@ -541,7 +662,7 @@ const List = () => {
                   <p className="max-w-[320px] text-xs leading-relaxed text-slate-500">
                     {hasActiveFilters
                       ? "Try a different name, ID, role or department — or clear the filters to see everyone."
-                      : "Once staff are added they will appear here with full IDs, roles and contacts."}
+                      : "Add your first employee and they will appear here."}
                   </p>
                   {hasActiveFilters && (
                     <button
@@ -555,6 +676,8 @@ const List = () => {
                 </div>
               }
               highlightOnHover
+              pointerOnHover
+              onRowClicked={(row) => setDetailsId(row._id)}
               responsive
               fixedHeader
               fixedHeaderScrollHeight="calc(100vh - 340px)"
@@ -649,6 +772,52 @@ const List = () => {
               )} of ${totalRows}`
             : "Directory is empty"}
         </p>
+
+        {detailsId && (
+          <EmployeeDetailsModal
+            employeeId={detailsId}
+            onClose={closeDetails}
+            onEdit={(id) => setEditId(id)}
+            active={!editId}
+            refreshKey={refreshKey}
+          />
+        )}
+
+        {showAdd && (
+          <EmployeePopup
+            title="Add employee"
+            subtitle="They can sign in with their email and an email code."
+            onClose={closeAdd}
+          >
+            <Add
+              onSuccess={() => {
+                setShowAdd(false);
+                setRefreshKey((key) => key + 1);
+              }}
+              onCancel={closeAdd}
+              bare
+            />
+          </EmployeePopup>
+        )}
+
+        {editId && (
+          <EmployeePopup
+            title="Edit employee"
+            subtitle="Update this employee's record."
+            onClose={closeEdit}
+          >
+            <Edit
+              employeeId={editId}
+              onSuccess={() => {
+                // Back to the details popup, which reloads the saved record.
+                setEditId(null);
+                setRefreshKey((key) => key + 1);
+              }}
+              onCancel={closeEdit}
+              bare
+            />
+          </EmployeePopup>
+        )}
     </div>
   );
 };

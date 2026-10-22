@@ -36,6 +36,26 @@ body {
   outline-offset: 2px;
 }
 
+/* Fields that show focus through their own container, such as the
+   Work locations strip, opt out of the outline. */
+.no-focus-outline:focus-visible {
+  outline: none;
+}
+
+@keyframes alert-line {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--alert-glow, transparent);
+  }
+}
+
+.alert-blink {
+  animation: alert-line 1.1s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

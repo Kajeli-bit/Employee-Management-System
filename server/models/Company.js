@@ -14,7 +14,8 @@ const companySchema = new mongoose.Schema(
     head: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      // Empty until the first sign-in claims the company as Managing Director.
+      default: null,
     },
 
     // Attendance policy shared by everyone in the company.

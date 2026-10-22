@@ -73,6 +73,14 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
 
+  // Company-wide visibility override. Department-scoped roles (e.g. an HR
+  // manager) with this flag see every department like company leadership,
+  // while keeping their level for seniority checks.
+  companyScope: {
+    type: Boolean,
+    default: false,
+  },
+
   profileImage: {
     type: String,
   },

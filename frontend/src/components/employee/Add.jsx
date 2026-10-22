@@ -8,7 +8,7 @@ import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 import { CAPABILITIES, hasCapability } from "../../utils/roles";
 
-const Add = () => {
+const Add = ({ onSuccess, onCancel, bare = false } = {}) => {
   const navigate = useNavigate();
   const { user, getToken } = useAuth();
 
@@ -83,7 +83,13 @@ const Add = () => {
           `${response.data.role || "Employee"} added. They can sign in with ${response.data.employeeEmail} and an email code.`
         );
 
-        setTimeout(() => navigate("/admin-dashboard/employees"), 1800);
+        setTimeout(() => {
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            navigate("/admin-dashboard/employees");
+          }
+        }, 1800);
       }
     } catch (error) {
       alert(
@@ -115,9 +121,10 @@ const Add = () => {
         jobTitles={jobTitles}
         submitting={submitting}
         successMessage={successMessage}
-        onSubmit={handleSubmit}
-        onCancel={() => navigate("/admin-dashboard/employees")}
+      onSubmit={handleSubmit}
+      onCancel={onCancel ?? (() => navigate("/admin-dashboard/employees"))}
         submitLabel="Add employee"
+        bare={bare}
       />
     </div>
   );

@@ -4,12 +4,7 @@ import Employee from "../models/Employee.js";
 import User from "../models/User.js";
 import WorkLocation from "../models/WorkLocation.js";
 
-import {
-  CAPABILITIES,
-  getRole,
-  hasCapability,
-  roleLevel,
-} from "../utils/roles.js";
+import { CAPABILITIES, hasCapability, roleLevel } from "../utils/roles.js";
 import {
   DEFAULT_TIMEZONE,
   evaluateGeofence,
@@ -22,9 +17,9 @@ import {
   zonedTimeToUtc,
 } from "../utils/geo.js";
 import {
+  accessibleEmployeeFilter,
   canManageEmployee,
-  departmentWithChildren,
-  employeeScopeFilter,
+  canViewEmployee,
   getActorEmployee,
 } from "../utils/access.js";
 
@@ -37,8 +32,6 @@ const DEFAULT_POLICY = {
   requireGeofence: true,
   weekendDays: [0, 6],
 };
-
-const roleScope = (user) => getRole(user.role)?.scope;
 
 const getPolicy = (company) => ({
   ...DEFAULT_POLICY,
@@ -486,8 +479,6 @@ export const getAttendance = async (req, res) => {
 
     const company = await getCompany(req.user.companyId);
     const policy = getPolicy(company);
-    const actorEmployee = await getActorEmployee(req.user);
-
     const date = isDateKey(req.query.date)
       ? req.query.date
       : localDateKey(new Date(), policy.timezone);
@@ -499,16 +490,8 @@ export const getAttendance = async (req, res) => {
     );
     const skip = (page - 1) * limit;
 
-    const scopedDepartments =
-      roleScope(req.user) === "department"
-        ? await departmentWithChildren(
-            actorEmployee?.department,
-            req.user.companyId
-          )
-        : null;
-
-    const employeeFilter =
-      employeeScopeFilter(req.user, actorEmployee, scopedDepartments) || {};
+    // Same population the dashboard counts and the directory lists.
+    const employeeFilter = (await accessibleEmployeeFilter(req.user)) || {};
 
     // Department and team leads are pinned to their own department, so a query
     // parameter cannot widen their view.
@@ -530,8 +513,17 @@ export const getAttendance = async (req, res) => {
         .select("_id")
         .lean();
 
+      // Narrow within what the user may already see; search never widens scope.
+      const allowedIds = employeeFilter.userId?.$in;
+
       employeeFilter.userId = {
-        $in: matchingUsers.map((user) => user._id),
+        $in: matchingUsers
+          .map((user) => user._id)
+          .filter(
+            (id) =>
+              !allowedIds ||
+              allowedIds.some((allowed) => allowed.equals(id))
+          ),
       };
     }
 
@@ -548,7 +540,12 @@ export const getAttendance = async (req, res) => {
 
     attendanceQuery.date = date;
 
-    if (req.query.status) {
+    // "Missing" and "CheckedIn" are roster-level filters, not record statuses.
+    if (
+      req.query.status &&
+      req.query.status !== "Missing" &&
+      req.query.status !== "CheckedIn"
+    ) {
       attendanceQuery.status = req.query.status;
     }
 
@@ -586,11 +583,16 @@ export const getAttendance = async (req, res) => {
     });
 
     const statusFilter = req.query.status;
-    const filteredRows = statusFilter
-      ? rows.filter(
-          (row) => row.record && row.record.status === statusFilter
-        )
-      : rows;
+    const filteredRows =
+      statusFilter === "Missing"
+        ? rows.filter((row) => !row.record?.checkIn)
+        : statusFilter === "CheckedIn"
+          ? rows.filter((row) => row.record?.checkIn)
+        : statusFilter
+          ? rows.filter(
+              (row) => row.record && row.record.status === statusFilter
+            )
+          : rows;
 
     const total = filteredRows.length;
 
@@ -623,6 +625,79 @@ export const getAttendance = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: "Unable to load attendance records",
+    });
+  }
+};
+
+export const getEmployeeHistory = async (req, res) => {
+  try {
+    if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_VIEW)) {
+      return res.status(403).json({
+        success: false,
+        error: "You are not allowed to view attendance records",
+      });
+    }
+
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 30, 1),
+      100
+    );
+
+    const employee = await Employee.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    })
+      .populate("userId", "name role")
+      .populate("department", "dep_name")
+      .lean();
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        error: "Employee not found",
+      });
+    }
+
+    const actorEmployee = await getActorEmployee(req.user);
+
+    const allowed = await canViewEmployee({
+      user: req.user,
+      actorEmployee,
+      targetEmployee: employee,
+      targetRole: employee.userId?.role,
+    });
+
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        error: "You are not allowed to view this employee",
+      });
+    }
+
+    const records = await Attendance.find({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+    })
+      .sort({ date: -1 })
+      .limit(limit)
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      employee: {
+        _id: employee._id,
+        name: employee.userId?.name || employee.name || "Unknown",
+        designation: employee.designation || "",
+        department: employee.department?.dep_name || "",
+      },
+      records: records.map(serializeRecord),
+    });
+  } catch (error) {
+    console.log("GET EMPLOYEE HISTORY ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to load attendance history",
     });
   }
 };

@@ -2,32 +2,48 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import {
   FaUser,
-  FaEnvelope,
-  FaBuilding,
-  FaBriefcase,
-  FaMoneyBillWave,
-  FaIdBadge,
-  FaVenusMars,
-  FaBirthdayCake,
-  FaHeart,
+  FaPhone,
+  FaMapMarkerAlt,
+  FaGraduationCap,
+  FaClipboardCheck,
 } from "react-icons/fa";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 import { formatCurrency, formatDate } from "../../utils/format";
 import { roleLabel } from "../../utils/roles";
 
-const InfoRow = ({ icon, label, value }) => (
-  <div className="flex items-center justify-between gap-4 border-b border-gray-100 py-3 last:border-0">
-    <div className="flex items-center gap-3 text-sm text-gray-500">
-      {icon}
-      <span>{label}</span>
-    </div>
+const empty = (value) =>
+  value === null || value === undefined || value === "" ? "—" : value;
 
-    <span className="max-w-[60%] break-words text-right text-sm font-semibold text-gray-800">
-      {value || "N/A"}
+const Row = ({ label, value, mono }) => (
+  <div className="flex items-baseline justify-between gap-4 border-b border-slate-100 py-2.5 text-sm last:border-0">
+    <span className="shrink-0 text-slate-500">{label}</span>
+    <span
+      className={`min-w-0 break-words text-right font-medium ${
+        value === "—" ? "text-slate-300" : "text-slate-800"
+      } ${mono ? "font-mono text-[13px]" : ""}`}
+    >
+      {value}
     </span>
   </div>
 );
+
+const Card = ({ icon, title, children }) => (
+  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+        {icon}
+      </span>
+      <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
+    </div>
+    <div className="px-5 py-2">{children}</div>
+  </section>
+);
+
+const statusTone = (status) =>
+  status === "Active"
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    : "bg-white text-slate-600 ring-slate-200";
 
 const Profile = () => {
   const { getToken } = useAuth();
@@ -74,236 +90,218 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <div className="text-sm font-medium text-gray-500">
-          Loading profile...
-        </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+        <p className="text-sm text-slate-500">Loading your profile…</p>
       </div>
     );
   }
 
   if (!employee) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <div className="rounded-lg border bg-white px-6 py-5 text-sm font-medium text-red-600 shadow-sm">
-          Unable to load profile
-        </div>
+      <div className="rounded-2xl border border-rose-200 bg-white p-10 text-center shadow-sm">
+        <p className="text-sm font-medium text-rose-600">
+          Unable to load profile. Ask your administrator to check your
+          employee record.
+        </p>
       </div>
     );
   }
 
-  const salary = formatCurrency(employee.salary);
-
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="h-24 bg-gradient-to-r from-brand-600 to-violet-600" />
-
-          <div className="px-5 pb-6 md:px-7">
-            <div className="-mt-12 flex flex-col items-center gap-4 md:flex-row md:items-end">
-              <img
-                src={
-                  employee.profileImage ||
-                  "https://via.placeholder.com/140"
-                }
-                alt="Profile"
-                className="h-28 w-28 rounded-full border-4 border-white bg-white object-cover shadow-md"
-              />
-
-              <div className="text-center md:pb-1 md:text-left">
-                <h1 className="text-2xl font-bold text-gray-800">
-                  {employee.name}
-                </h1>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  {employee.designation || "Employee"}
-                </p>
-
-                <span className="mt-2 inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-                  Employee ID: {employee.employeeId}
+    <div>
+      <section className="overflow-hidden rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 via-white to-brand-100/60 text-slate-900 shadow-sm">
+        <div
+          className="px-5 pb-5 pt-6 sm:px-7"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(99,53,139,0.10) 1px, transparent 1px)",
+            backgroundSize: "18px 18px",
+          }}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <img
+              src={
+                employee.profileImage ||
+                "https://via.placeholder.com/140"
+              }
+              alt={`Profile photo of ${employee.name}`}
+              className="h-20 w-20 rounded-2xl border border-white bg-white object-cover shadow-sm"
+            />
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
+                {employee.name}
+              </h2>
+              <p className="mt-0.5 text-sm text-brand-600">
+                {empty(employee.designation)} ·{" "}
+                {empty(employee.department)}
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-white px-2.5 py-1 font-mono text-[11px] font-medium tabular-nums text-brand-800 ring-1 ring-inset ring-brand-200">
+                  {empty(employee.employeeId)}
+                </span>
+                <span className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+                  {roleLabel(employee.role)}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${statusTone(
+                    employee.employmentStatus
+                  )}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 rounded-full bg-current"
+                  />
+                  {empty(employee.employmentStatus)}
                 </span>
               </div>
             </div>
-
-            <div className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <div className="mb-2 flex items-center gap-3">
-                  <FaBuilding className="text-lg text-brand-600" />
-                  <span className="text-xs font-medium text-gray-500">
-                    Department
-                  </span>
-                </div>
-                <p className="font-semibold text-gray-800">
-                  {employee.department || "N/A"}
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <div className="mb-2 flex items-center gap-3">
-                  <FaBriefcase className="text-lg text-blue-600" />
-                  <span className="text-xs font-medium text-gray-500">
-                    Designation
-                  </span>
-                </div>
-                <p className="font-semibold text-gray-800">
-                  {employee.designation || "N/A"}
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <div className="mb-2 flex items-center gap-3">
-                  <FaMoneyBillWave className="text-lg text-green-600" />
-                  <span className="text-xs font-medium text-gray-500">
-                    Monthly Salary
-                  </span>
-                </div>
-                <p className="font-semibold text-gray-800">
-                  {salary}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-              <div className="rounded-lg border border-gray-200 bg-white">
-                <div className="border-b border-gray-200 px-5 py-4">
-                  <h2 className="text-base font-semibold text-gray-800">
-                    Personal Information
-                  </h2>
-                </div>
-
-                <div className="px-5">
-                  <InfoRow
-                    icon={<FaUser className="text-brand-600" />}
-                    label="Name"
-                    value={employee.name}
-                  />
-
-                  <InfoRow
-                    icon={<FaEnvelope className="text-brand-600" />}
-                    label="Email"
-                    value={employee.email}
-                  />
-
-                  <InfoRow
-                    icon={<FaVenusMars className="text-brand-600" />}
-                    label="Gender"
-                    value={employee.gender}
-                  />
-
-                  <InfoRow
-                    icon={<FaBirthdayCake className="text-brand-600" />}
-                    label="Date of Birth"
-                    value={formatDate(employee.dob)}
-                  />
-
-                  <InfoRow
-                    icon={<FaHeart className="text-brand-600" />}
-                    label="Marital Status"
-                    value={employee.maritalStatus}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white">
-                <div className="border-b border-gray-200 px-5 py-4">
-                  <h2 className="text-base font-semibold text-gray-800">
-                    Employment Information
-                  </h2>
-                </div>
-
-                <div className="px-5">
-                  <InfoRow
-                    icon={<FaIdBadge className="text-blue-600" />}
-                    label="Employee ID"
-                    value={employee.employeeId}
-                  />
-
-                  <InfoRow
-                    icon={<FaBuilding className="text-blue-600" />}
-                    label="Department"
-                    value={employee.department}
-                  />
-
-                  <InfoRow
-                    icon={<FaBriefcase className="text-blue-600" />}
-                    label="Designation"
-                    value={employee.designation}
-                  />
-
-                  <InfoRow
-                    icon={<FaMoneyBillWave className="text-green-600" />}
-                    label="Monthly Salary"
-                    value={salary}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-              <div className="rounded-lg border border-gray-200 bg-white">
-                <div className="border-b border-gray-200 px-5 py-4">
-                  <h2 className="text-base font-semibold text-gray-800">
-                    Employment
-                  </h2>
-                </div>
-                <div className="px-5">
-                  {[
-                    ["Role", roleLabel(employee.role)],
-                    ["Employment type", employee.employmentType],
-                    ["Status", employee.employmentStatus],
-                    ["Date joined", formatDate(employee.dateOfJoining)],
-                    ["Attendance mode", employee.workMode],
-                    ["National ID", employee.nationalId],
-                    ["TIN", employee.tin],
-                    ["NSSF", employee.nssfNumber],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between gap-4 border-b border-gray-100 py-3 text-sm last:border-0"
-                    >
-                      <span className="text-gray-500">{label}</span>
-                      <span className="text-right font-medium text-gray-800">
-                        {value || "—"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white">
-                <div className="border-b border-gray-200 px-5 py-4">
-                  <h2 className="text-base font-semibold text-gray-800">
-                    Contact and emergency
-                  </h2>
-                </div>
-                <div className="px-5">
-                  {[
-                    ["Phone", employee.phone],
-                    ["Personal email", employee.personalEmail],
-                    ["Address", employee.address],
-                    ["City", employee.city],
-                    ["Emergency contact", employee.emergencyContact?.name],
-                    ["Emergency phone", employee.emergencyContact?.phone],
-                    ["Qualification", employee.qualification],
-                    ["Skills", (employee.skills || []).join(", ")],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between gap-4 border-b border-gray-100 py-3 text-sm last:border-0"
-                    >
-                      <span className="text-gray-500">{label}</span>
-                      <span className="max-w-[60%] break-words text-right font-medium text-gray-800">
-                        {value || "—"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="shrink-0 sm:text-right">
+              <p className="text-[11px] uppercase tracking-wide text-brand-500">
+                Monthly salary
+              </p>
+              <p className="mt-0.5 font-mono text-xl font-semibold tabular-nums text-brand-900">
+                {formatCurrency(employee.salary)}
+              </p>
             </div>
           </div>
         </div>
+      </section>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card
+          icon={<FaUser aria-hidden="true" />}
+          title="Personal information"
+        >
+          <Row label="Full name" value={empty(employee.name)} />
+          <Row label="Work email" value={empty(employee.email)} />
+          <Row label="Gender" value={empty(employee.gender)} />
+          <Row
+            label="Date of birth"
+            value={
+              employee.dob ? formatDate(employee.dob) : "—"
+            }
+          />
+          <Row
+            label="Marital status"
+            value={empty(employee.maritalStatus)}
+          />
+        </Card>
+
+        <Card
+          icon={<FaClipboardCheck aria-hidden="true" />}
+          title="Employment"
+        >
+          <Row
+            label="Employee ID"
+            value={empty(employee.employeeId)}
+            mono
+          />
+          <Row
+            label="Department"
+            value={empty(employee.department)}
+          />
+          <Row
+            label="Designation"
+            value={empty(employee.designation)}
+          />
+          <Row
+            label="Employment type"
+            value={empty(employee.employmentType)}
+          />
+          <Row
+            label="Date joined"
+            value={
+              employee.dateOfJoining
+                ? formatDate(employee.dateOfJoining)
+                : "—"
+            }
+          />
+          <Row
+            label="Attendance mode"
+            value={empty(employee.workMode)}
+          />
+          <Row
+            label="National ID"
+            value={empty(employee.nationalId)}
+            mono
+          />
+          <Row label="TIN" value={empty(employee.tin)} mono />
+          <Row
+            label="NSSF number"
+            value={empty(employee.nssfNumber)}
+            mono
+          />
+        </Card>
+
+        <Card
+          icon={<FaPhone aria-hidden="true" />}
+          title="Contact and emergency"
+        >
+          <Row label="Phone" value={empty(employee.phone)} mono />
+          <Row
+            label="Personal email"
+            value={empty(employee.personalEmail)}
+          />
+          <Row
+            label="Address"
+            value={empty(employee.address)}
+          />
+          <Row
+            label="City"
+            value={
+              [employee.city, employee.region]
+                .filter(Boolean)
+                .join(", ") || "—"
+            }
+          />
+          <Row
+            label="Emergency contact"
+            value={
+              [employee.emergencyContact?.name, employee.emergencyContact?.relationship]
+                .filter(Boolean)
+                .join(" · ") || "—"
+            }
+          />
+          <Row
+            label="Emergency phone"
+            value={empty(employee.emergencyContact?.phone)}
+            mono
+          />
+        </Card>
+
+        <Card
+          icon={<FaGraduationCap aria-hidden="true" />}
+          title="Qualifications and skills"
+        >
+          <Row
+            label="Highest qualification"
+            value={empty(employee.qualification)}
+          />
+          <Row
+            label="Field of study"
+            value={empty(employee.fieldOfStudy)}
+          />
+          <Row
+            label="Skills"
+            value={
+              (employee.skills || []).join(", ") || "—"
+            }
+          />
+        </Card>
       </div>
+
+      <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-slate-500">
+        <FaMapMarkerAlt
+          aria-hidden="true"
+          className="mt-0.5 shrink-0 text-slate-400"
+        />
+        <span>
+          Your role, department and salary are kept by your manager. If
+          anything here looks wrong, ask them to update your employee
+          record.
+        </span>
+      </p>
+
     </div>
   );
 };

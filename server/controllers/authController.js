@@ -5,10 +5,31 @@ import { getAuth } from "@clerk/express";
 
 import User from "../models/User.js";
 import Company from "../models/Company.js";
+import Department from "../models/Department.js";
 import Employee from "../models/Employee.js";
 import { ROLES } from "../utils/roles.js";
 import { seedCompanyDefaults } from "../utils/orgDefaults.js";
 
+
+// Public: tells the sign-in page whether the database still needs its first
+// company. Only a boolean is returned, no company details.
+const setupStatus = async (req, res) => {
+  try {
+    const companyClaimed = await Company.exists({ head: { $ne: null } });
+
+    return res.status(200).json({
+      success: true,
+      setupRequired: !companyClaimed,
+    });
+  } catch (error) {
+    console.log("SETUP STATUS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Server Error",
+    });
+  }
+};
 
 const register = async (req, res) => {
   const session = await mongoose.startSession();
@@ -21,6 +42,16 @@ const register = async (req, res) => {
       return res.status(401).json({
         success: false,
         error: "Clerk authentication required",
+      });
+    }
+
+    // The first person to sign in becomes the Managing Director and sets up the
+    // company. Once a company exists, nobody else can create one.
+    if (await Company.exists({ head: { $ne: null } })) {
+      return res.status(409).json({
+        success: false,
+        error:
+          "This company is already set up. Ask the Managing Director to add your account.",
       });
     }
 
@@ -92,20 +123,26 @@ const register = async (req, res) => {
     const normalizedCompanyName =
       companyName.trim();
 
-    const companyExists = await Company.findOne({
-      name: normalizedCompanyName,
-    });
+    // A company seeded ahead of time (no Managing Director yet) is claimed by
+    // this first sign-in. Otherwise a brand-new company is created.
+    const seededCompany = await Company.findOne({ head: null });
 
-    if (companyExists) {
-      return res.status(400).json({
-        success: false,
-        error: "Company name already exists",
+    if (!seededCompany) {
+      const companyExists = await Company.findOne({
+        name: normalizedCompanyName,
       });
+
+      if (companyExists) {
+        return res.status(400).json({
+          success: false,
+          error: "Company name already exists",
+        });
+      }
     }
 
-    
-    const companyId =
-      new mongoose.Types.ObjectId();
+    const companyId = seededCompany
+      ? seededCompany._id
+      : new mongoose.Types.ObjectId();
 
     session.startTransaction();
     transactionStarted = true;
@@ -139,17 +176,19 @@ const register = async (req, res) => {
       });
 
     
-    const newCompany = new Company({
-      _id: companyId,
+    if (seededCompany) {
+      seededCompany.head = savedUser._id;
+      seededCompany.name = normalizedCompanyName;
+      await seededCompany.save({ session });
+    } else {
+      const newCompany = new Company({
+        _id: companyId,
+        name: normalizedCompanyName,
+        head: savedUser._id,
+      });
 
-      name: normalizedCompanyName,
-
-      head: savedUser._id,
-    });
-
-    await newCompany.save({
-      session,
-    });
+      await newCompany.save({ session });
+    }
 
     // Create the Nilric departments, teams and head-office geofence so employees
     // can be added and attendance recorded right away.
@@ -162,9 +201,12 @@ const register = async (req, res) => {
     // The Managing Director is also an employee so they appear on the
     // organisation chart and can record attendance. Salary starts at 0 and can
     // be set like any other employee record.
-    const mdDepartment =
-      seeded?.departments?.administration_hr ||
-      seeded?.departments?.operations;
+    // A claimed company already has its departments, so look them up by key
+    // rather than relying on what this request created.
+    const mdDepartment = await Department.findOne({
+      companyId,
+      key: "administration_hr",
+    }).session(session);
 
     if (mdDepartment) {
       await new Employee({
@@ -568,6 +610,7 @@ const setting = async (req, res) => {
 
 
 export {
+  setupStatus,
   register,
   login,
   verify,

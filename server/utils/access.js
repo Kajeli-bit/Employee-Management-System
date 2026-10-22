@@ -1,7 +1,21 @@
 import Department from "../models/Department.js";
 import Employee from "../models/Employee.js";
+import User from "../models/User.js";
 
-import { canManageRole, getRole, roleLevel } from "./roles.js";
+import {
+  LEGACY_ROLE_KEYS,
+  ROLE_KEYS,
+  assignableRoles,
+  canManageRole,
+  getRole,
+  roleLevel,
+} from "./roles.js";
+
+// True when the user sees every department: company-level roles, plus
+// department-scoped users explicitly granted company-wide access (e.g. HR).
+// Works with both Mongoose documents and lean objects.
+export const hasCompanyScope = (user) =>
+  getRole(user?.role)?.scope === "company" || user?.companyScope === true;
 
 // The Employee record behind the signed-in user. Managing directors created at
 // registration have one, but callers must still handle null.
@@ -36,7 +50,7 @@ export const employeeScopeFilter = (user, actorEmployee, departmentIds) => {
     return null;
   }
 
-  if (role.scope === "company") {
+  if (role.scope === "company" || user?.companyScope === true) {
     return { companyId: user.companyId };
   }
 
@@ -62,6 +76,48 @@ export const employeeScopeFilter = (user, actorEmployee, departmentIds) => {
   };
 };
 
+// Roles whose people the user is allowed to see. Company-wide users (leadership
+// and roles granted companyScope, such as HR) see every role including the ones
+// above them; department-scoped users see only the roles they outrank.
+export const visibleRoleKeys = (user) =>
+  hasCompanyScope(user)
+    ? [...ROLE_KEYS, ...LEGACY_ROLE_KEYS]
+    : assignableRoles(user.role);
+
+// The single source of truth for "which employees can this person see".
+// Every page (directory, attendance, salary, leave) and the dashboard build
+// their queries from this, so counts on the dashboard always match the rows on
+// the page behind them.
+export const accessibleEmployeeFilter = async (user) => {
+  const actorEmployee = await getActorEmployee(user);
+
+  const scopedDepartments = hasCompanyScope(user)
+    ? []
+    : await departmentWithChildren(
+        actorEmployee?.department,
+        user.companyId
+      );
+
+  const scope = employeeScopeFilter(user, actorEmployee, scopedDepartments);
+
+  if (!scope) {
+    return null;
+  }
+
+  // Same population the employee directory lists under the same rule.
+  const visibleUsers = await User.find({
+    companyId: user.companyId,
+    $or: [{ role: { $in: visibleRoleKeys(user) } }, { _id: user._id }],
+  })
+    .select("_id")
+    .lean();
+
+  return {
+    ...scope,
+    userId: { $in: visibleUsers.map((entry) => entry._id) },
+  };
+};
+
 const isSameDepartment = async (actorEmployee, targetDepartment) => {
   if (!actorEmployee?.department || !targetDepartment) {
     return false;
@@ -82,8 +138,10 @@ const isSameDepartment = async (actorEmployee, targetDepartment) => {
   );
 };
 
-// Department managers and team leads only see their own department (and its
-// teams); company level roles see everyone at or below their level.
+// Viewing follows the same rule as the directory: company-wide access sees the
+// whole company (including people above them), department access sees only the
+// roles they outrank inside their own department. Editing stays seniority-gated
+// in canManageEmployee below.
 export const canViewEmployee = async ({
   user,
   actorEmployee,
@@ -107,12 +165,12 @@ export const canViewEmployee = async ({
     return false;
   }
 
-  if (roleLevel(user.role) < roleLevel(targetRole)) {
-    return false;
+  if (hasCompanyScope(user)) {
+    return true;
   }
 
-  if (role.scope === "company") {
-    return true;
+  if (roleLevel(user.role) < roleLevel(targetRole)) {
+    return false;
   }
 
   return isSameDepartment(actorEmployee, targetEmployee.department);
@@ -134,7 +192,7 @@ export const canManageEmployee = async ({
 
   const role = getRole(user.role);
 
-  if (role?.scope === "company") {
+  if (role?.scope === "company" || user?.companyScope === true) {
     return true;
   }
 

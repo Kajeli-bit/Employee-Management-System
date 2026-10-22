@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FaBuilding, FaChevronRight, FaSearch } from "react-icons/fa";
+import { FaBuilding, FaChevronRight } from "react-icons/fa";
 import AddDepartment from "./AddDepartment";
 import { Monogram } from "../../utils/DepartmentMonogram";
 import axios from "axios";
@@ -364,58 +364,59 @@ const DepartmentList = () => {
                 </span>
                 Departments
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Nilric units and their teams · select a card for teams and
-                details
-              </p>
             </div>
 
-            <div className="flex gap-3 text-right">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Departments
-                </p>
-                <p className="font-mono text-xl font-semibold tabular-nums text-slate-900">
-                  {onlyDepartments(departments).length}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Teams
-                </p>
-                <p className="font-mono text-xl font-semibold tabular-nums text-slate-900">
-                  {teamTotal}
-                </p>
-              </div>
-            </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-full sm:max-w-xs">
-              <FaSearch
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              />
+          <div className="mt-5 grid shrink-0 grid-cols-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <div className="col-span-2 min-w-0 px-5 py-3 sm:col-span-1">
+              <label
+                htmlFor="department-search"
+                className="block text-[11px] font-medium uppercase tracking-wide text-slate-400"
+              >
+                Search
+              </label>
               <input
+                id="department-search"
                 type="text"
                 placeholder="Search departments"
-                aria-label="Search departments"
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-600/15"
+                style={{ outline: "none" }}
+                className="mt-1 w-full bg-transparent text-sm font-semibold text-slate-900 placeholder:font-normal placeholder:text-slate-400"
                 onChange={filterDepartments}
               />
             </div>
 
+            <div className="px-5 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Departments
+              </p>
+              <p className="mt-1 font-mono text-2xl font-semibold leading-none tabular-nums text-slate-900">
+                {onlyDepartments(departments).length}
+              </p>
+            </div>
+
+            <div className="px-5 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Teams
+              </p>
+              <p className="mt-1 font-mono text-2xl font-semibold leading-none tabular-nums text-slate-900">
+                {teamTotal}
+              </p>
+            </div>
+
             {canManage && (
+              <div className="col-span-2 flex min-w-0 items-center px-3 py-3 sm:col-span-3 lg:col-span-1">
               <button
                 type="button"
                 onClick={() => setShowAdd(true)}
-                className="inline-flex shrink-0 items-center justify-center gap-2 self-end rounded-2xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
               >
                 <span aria-hidden="true" className="text-lg leading-none">
                   +
                 </span>
                 Add New Department
               </button>
+              </div>
             )}
           </div>
 
@@ -469,8 +470,7 @@ const DepartmentList = () => {
           )}
 
           {showAdd && (
-            <div
-              className="fixed inset-0 left-64 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
+            <div               className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm lg:left-64"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) {
                   setShowAdd(false);
@@ -492,8 +492,7 @@ const DepartmentList = () => {
           )}
 
           {viewingId && (
-            <div
-              className="fixed inset-0 left-64 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm"
+            <div               className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm lg:left-64"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) {
                   setViewingId(null);

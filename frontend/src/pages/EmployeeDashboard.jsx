@@ -42,11 +42,11 @@ const EmployeeDashboard = () => {
 
       
 
-      <div className="relative z-20 ml-64 min-h-screen">
+      <div className="relative z-20 min-h-screen pt-14 lg:ml-64 lg:pt-0">
 
         {/* Navbar */}
 
-        <div className="sticky top-0 z-40 px-4 pt-4">
+        <div className="sticky top-14 z-30 px-3 pt-3 sm:px-4 sm:pt-4 lg:top-0">
 
           <div className="rounded-2xl shadow-lg border border-white/60 bg-white/80 backdrop-blur-xl overflow-hidden">
 

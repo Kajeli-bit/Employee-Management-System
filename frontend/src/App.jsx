@@ -43,6 +43,7 @@ import SalaryHistory from "./components/salary/SalaryHistory";
 
 // Admin Settings
 import Settings from "./components/settings/Settings";
+import AccountSettings from "./components/settings/AccountSettings";
 
 // Attendance
 import AttendanceRegister from "./components/attendance/AttendanceRegister";
@@ -246,6 +247,11 @@ function App() {
           <Route
             path="settings"
             element={<Settings />}
+          />
+
+          <Route
+            path="account"
+            element={<AccountSettings />}
           />
 
         </Route>

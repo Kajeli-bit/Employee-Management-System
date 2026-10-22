@@ -1,34 +1,15 @@
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/useAuth";
 import API_URL from "../api";
-import {
-  canManageRole,
-  roleBadgeClass,
-  roleLabel,
-} from "./roles";
-import { formatCurrency } from "./format";
-
-const headerCell = "Employee directory column";
+import { roleBadgeClass, roleLabel } from "./roles";
 
 export const columns = [
-  {
-    name: <span title={headerCell}>No.</span>,
-    selector: (row) => row.sno,
-    width: "40px",
-    center: true,
-    cell: (row) => (
-      <span className="font-mono text-xs tabular-nums text-slate-400">
-        {String(row.sno).padStart(2, "0")}
-      </span>
-    ),
-  },
   {
     name: <span title="Full staff identifier, never truncated">Employee ID</span>,
     selector: (row) => row.employeeId,
     // Compact but complete: fits IDs like MD-DE5CD3 in full with no
     // horizontal scroll. Chip stays nowrap so the whole ID always shows.
-    width: "112px",
+    grow: 0,
+    minWidth: "112px",
     left: true,
     style: {
       overflow: "hidden",
@@ -71,14 +52,14 @@ export const columns = [
 
         <div className="min-w-0 leading-snug">
           <p
-            className="truncate text-sm font-medium text-slate-900"
+            className="break-words text-sm font-medium text-slate-900"
             title={row.name}
           >
             {row.name || "N/A"}
           </p>
 
           <p
-            className="truncate text-xs text-slate-500"
+            className="break-all text-xs text-slate-500"
             title={row.email}
           >
             {row.email || ""}
@@ -87,7 +68,7 @@ export const columns = [
       </div>
     ),
     sortable: true,
-    grow: 2,
+    grow: 4,
     minWidth: "160px",
     style: {
       overflow: "hidden",
@@ -99,7 +80,7 @@ export const columns = [
     cell: (row) => (
       <span
         title={roleLabel(row.role)}
-        className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${roleBadgeClass(
+        className={`flex w-max max-w-full items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-tight ${roleBadgeClass(
           row.role
         )} border-black/5`}
       >
@@ -107,11 +88,13 @@ export const columns = [
           aria-hidden="true"
           className="h-1 w-1 shrink-0 rounded-full bg-current opacity-70"
         />
-        <span className="truncate">{roleLabel(row.role)}</span>
+        <span className="min-w-0 truncate">{roleLabel(row.role)}</span>
       </span>
     ),
     sortable: true,
-    width: "124px",
+    grow: 0,
+    // Widest badge ("Department Manager") is about 134px plus cell padding.
+    minWidth: "180px",
     left: true,
     style: {
       overflow: "hidden",
@@ -122,20 +105,14 @@ export const columns = [
     selector: (row) => row.dep_name,
     cell: (row) => (
       <span
-        className="block whitespace-normal text-[13px] leading-6 text-slate-600"
-        style={{
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
+        className="block whitespace-normal break-words text-[13px] leading-6 text-slate-600"
         title={row.dep_name}
       >
         {row.dep_name || "—"}
       </span>
     ),
     sortable: true,
-    grow: 1,
+    grow: 5,
     minWidth: "105px",
     style: {
       overflow: "hidden",
@@ -147,69 +124,18 @@ export const columns = [
     selector: (row) => row.designation,
     cell: (row) => (
       <span
-        className="block whitespace-normal text-[13px] leading-6 text-slate-600"
-        style={{
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
+        className="block whitespace-normal break-words text-[13px] leading-6 text-slate-600"
         title={row.designation}
       >
         {row.designation || "—"}
       </span>
     ),
     sortable: true,
-    grow: 1,
+    grow: 7,
     minWidth: "105px",
     style: {
       overflow: "hidden",
       whiteSpace: "normal",
-    },
-  },
-  {
-    name: <span title="Monthly gross">Salary</span>,
-    selector: (row) => Number(row.salary) || 0,
-    cell: (row) => (
-      <span
-        title={formatCurrency(row.salary)}
-        className="whitespace-nowrap text-[13px] font-medium tabular-nums text-slate-900"
-      >
-        {formatCurrency(row.salary)}
-      </span>
-    ),
-    sortable: true,
-    width: "92px",
-    right: true,
-    style: {
-      overflow: "hidden",
-    },
-  },
-  {
-    name: <span title="Direct line">Phone</span>,
-    selector: (row) => row.phone,
-    cell: (row) => (
-      <span
-        title={row.phone || "No phone number"}
-        className="whitespace-nowrap font-mono text-xs tabular-nums text-slate-600"
-      >
-        {row.phone || "—"}
-      </span>
-    ),
-    width: "102px",
-    left: true,
-    style: {
-      overflow: "hidden",
-    },
-  },
-  {
-    name: <span title="Open, edit or manage this employee">Actions</span>,
-    cell: (row) => <EmployeeButtons row={row} />,
-    width: "176px",
-    center: true,
-    allowOverflow: true,
-    style: {
-      overflow: "hidden",
     },
   },
 ];
@@ -302,87 +228,4 @@ export const fetchEmployees = async (
 
     return [];
   }
-};
-
-export const EmployeeButtons = ({ row }) => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
-  const isSelf =
-    user?._id &&
-    row?.userId &&
-    user._id === row.userId;
-
-  const canManage =
-    !isSelf &&
-    canManageRole(user?.role, row?.role);
-
-  if (!isSelf && !canManage) {
-    return (
-      <span className="text-[11px] text-slate-400">Restricted</span>
-    );
-  }
-
-  const base =
-    "inline-flex items-center justify-center rounded-md border px-2.5 py-1.5 text-[11px] font-semibold leading-none transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600";
-
-  return (
-    <div className="flex w-full flex-wrap items-center justify-center gap-1 py-0.5">
-      <button
-        type="button"
-        title={`View ${row.name || "employee"} profile`}
-        onClick={() =>
-          navigate(
-            `/admin-dashboard/employee/${row._id}`
-          )
-        }
-        className={`${base} border-brand-200 bg-brand-700 text-white shadow-sm hover:bg-brand-800`}
-      >
-        View
-      </button>
-
-      {canManage && (
-        <>
-          <button
-            type="button"
-            title={`Edit ${row.name || "employee"}`}
-            onClick={() =>
-              navigate(
-                `/admin-dashboard/employees/edit/${row._id}`
-              )
-            }
-            className={`${base} border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-900 hover:text-white`}
-          >
-            Edit
-          </button>
-
-          <button
-            type="button"
-            title={`Salary history for ${row.name || "employee"}`}
-            onClick={() =>
-              navigate(
-                `/admin-dashboard/salary-history/${row._id}`
-              )
-            }
-            className={`${base} border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-600 hover:text-white`}
-          >
-            Salary
-          </button>
-
-          <button
-            type="button"
-            title={`Leave records for ${row.name || "employee"}`}
-            onClick={() =>
-              navigate(
-                `/admin-dashboard/employee-leaves/${row._id}`
-              )
-            }
-            className={`${base} border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-500 hover:text-white`}
-          >
-            Leave
-          </button>
-        </>
-      )}
-    </div>
-  );
 };

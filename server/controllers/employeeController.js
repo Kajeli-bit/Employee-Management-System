@@ -12,7 +12,6 @@ import Attendance from "../models/Attendance.js";
 
 import {
   CAPABILITIES,
-  assignableRoles,
   canManageRole,
   hasCapability,
   isDepartmentScoped,
@@ -24,6 +23,7 @@ import {
   canViewEmployee,
   departmentWithChildren,
   getActorEmployee,
+  visibleRoleKeys,
 } from "../utils/access.js";
 
 // Fields added for the Nilric employee profile. Kept in one place so create and
@@ -295,7 +295,11 @@ export const addEmployee = async (req, res) => {
     }
 
     // Department managers can only add people into their own department.
-    if (isDepartmentScoped(req.user.role) && actorEmployee) {
+    if (
+        isDepartmentScoped(req.user.role) &&
+        !req.user.companyScope &&
+        actorEmployee
+      ) {
       const allowedDepartments = await departmentWithChildren(
         actorEmployee.department,
         req.user.companyId
@@ -548,7 +552,9 @@ export const addEmployee = async (req, res) => {
 
 export const getEmployees = async (req, res) => {
   try {
-    const accessibleRoles = assignableRoles(req.user.role);
+    // Same rule the dashboard and attendance register use, so the counts always
+    // match the rows listed here.
+    const accessibleRoles = visibleRoleKeys(req.user);
 
     const page = Math.max(
       parseInt(req.query.page, 10) || 1,
@@ -647,8 +653,9 @@ export const getEmployees = async (req, res) => {
 
     const actorEmployee = await getActorEmployee(req.user);
 
-    const scopedDepartments = isDepartmentScoped(req.user.role)
-      ? await departmentWithChildren(
+    const scopedDepartments =
+      isDepartmentScoped(req.user.role) && !req.user.companyScope
+        ? await departmentWithChildren(
           actorEmployee?.department,
           req.user.companyId
         )
@@ -993,7 +1000,11 @@ export const updateEmployee = async (
         });
       }
 
-      if (isDepartmentScoped(req.user.role) && actorEmployee) {
+      if (
+        isDepartmentScoped(req.user.role) &&
+        !req.user.companyScope &&
+        actorEmployee
+      ) {
         const allowedDepartments = await departmentWithChildren(
           actorEmployee.department,
           req.user.companyId

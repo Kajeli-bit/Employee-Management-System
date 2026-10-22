@@ -135,11 +135,6 @@ const OrgChart = () => {
   const tree = structure?.departmentTree || [];
   const roleCounts = structure?.roleCounts || {};
 
-  const totalPeople = Object.values(roleCounts).reduce(
-    (sum, count) => sum + count,
-    0
-  );
-
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
@@ -150,39 +145,12 @@ const OrgChart = () => {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-700 text-xl text-white shadow-sm">
-              <FaSitemap aria-hidden="true" />
-            </span>
-            Organisation structure
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Nilric General Traders Company Limited · {totalPeople}{" "}
-            {totalPeople === 1 ? "person" : "people"} on the system
-          </p>
-        </div>
-
-        <div className="flex gap-3 text-right">
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">
-              Departments
-            </p>
-            <p className="font-mono text-xl font-semibold tabular-nums text-slate-900">
-              {tree.length}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">
-              Management
-            </p>
-            <p className="font-mono text-xl font-semibold tabular-nums text-slate-900">
-              {structure?.managementCount ?? 0}
-            </p>
-          </div>
-        </div>
-      </div>
+      <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-700 text-xl text-white shadow-sm">
+          <FaSitemap aria-hidden="true" />
+        </span>
+        Organisation structure
+      </h1>
 
       {error && (
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">

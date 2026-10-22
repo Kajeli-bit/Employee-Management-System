@@ -48,9 +48,10 @@ const toFormValues = (employee) => ({
   "emergencyContact.phone": employee.emergencyContact?.phone || "",
 });
 
-const Edit = () => {
+const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id: routeId } = useParams();
+  const id = employeeId ?? routeId;
   const { getToken } = useAuth();
 
   const [initial, setInitial] = useState(null);
@@ -137,7 +138,13 @@ const Edit = () => {
       if (response.data.success) {
         setSuccessMessage("Employee profile updated.");
 
-        setTimeout(() => navigate("/admin-dashboard/employees"), 1500);
+        setTimeout(() => {
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            navigate("/admin-dashboard/employees");
+          }
+        }, 1500);
       }
     } catch (error) {
       alert(
@@ -167,8 +174,9 @@ const Edit = () => {
         submitting={submitting}
         successMessage={successMessage}
         onSubmit={handleSubmit}
-        onCancel={() => navigate("/admin-dashboard/employees")}
+        onCancel={onCancel ?? (() => navigate("/admin-dashboard/employees"))}
         submitLabel="Save changes"
+        bare={bare}
       />
     </div>
   );

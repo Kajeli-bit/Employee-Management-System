@@ -3,10 +3,10 @@ import { Outlet } from "react-router-dom";
 
 const AdminDashboard = () => {
   return (
-    <div className="flex">
+    <div className="min-h-screen bg-brand-50/60">
       <AdminSidebar />
 
-      <div className="flex-1 ml-64 bg-gray-100 min-h-screen">
+      <div className="pt-14 lg:ml-64 lg:pt-0">
         <Outlet />
       </div>
     </div>

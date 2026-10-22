@@ -3,10 +3,8 @@ import {
   FaBuilding,
   FaCalendar,
   FaClock,
-  FaCogs,
   FaMapMarkedAlt,
   FaMoneyBillWave,
-  FaPlus,
   FaSignOutAlt,
   FaSitemap,
   FaTachometerAlt,
@@ -20,16 +18,17 @@ import {
   roleLabel,
   roleLevel,
 } from "../../utils/roles";
+import DrawerShell from "../ui/DrawerShell";
 
 const menuClass = ({ isActive }) =>
-  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
+  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
     isActive
-      ? "bg-brand-600 text-white"
-      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+      ? "bg-brand-700 text-white shadow-sm"
+      : "text-brand-950/70 hover:bg-brand-100 hover:text-brand-950"
   }`;
 
 const GroupLabel = ({ children }) => (
-  <p className="mt-5 mb-1.5 px-3 text-[11px] font-medium text-slate-500">
+  <p className="mt-5 mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-brand-950/45">
     {children}
   </p>
 );
@@ -41,7 +40,6 @@ const AdminSidebar = () => {
   const can = (capability) => hasCapability(role, capability);
 
   const showEmployees = can(CAPABILITIES.PEOPLE_VIEW);
-  const showAddEmployee = can(CAPABILITIES.PEOPLE_MANAGE);
   const showDepartments = can(CAPABILITIES.DEPARTMENTS_VIEW);
   const showLeave = can(CAPABILITIES.LEAVES_APPROVE) || can(CAPABILITIES.LEAVES_VIEW);
   const showApplyLeave = can(CAPABILITIES.LEAVES_APPLY);
@@ -50,17 +48,13 @@ const AdminSidebar = () => {
   const showLocations = can(CAPABILITIES.LOCATIONS_MANAGE);
 
   return (
-    <aside className="fixed left-0 top-0 flex h-screen w-64 flex-col border-r border-slate-800 bg-slate-900 text-white">
-      <div className="flex h-16 items-center gap-2 border-b border-slate-800 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-600 text-sm font-bold">
-          N
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">Nilric</p>
-          <p className="truncate text-[11px] text-slate-400">
-            General Traders
-          </p>
-        </div>
+    <DrawerShell onLogout={logout} user={user} roleFooter={`${roleLabel(role)} · L${roleLevel(role)}`}>
+      <div className="flex h-16 shrink-0 items-center border-b border-brand-950/10 bg-white px-4">
+        <img
+          src="/nilric-logo.png"
+          alt="Nilric General Traders"
+          className="h-9 w-auto"
+        />
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
@@ -89,13 +83,6 @@ const AdminSidebar = () => {
           <NavLink to="/admin-dashboard/employees" className={menuClass}>
             <FaUsers />
             <span>Employees</span>
-          </NavLink>
-        )}
-
-        {showAddEmployee && (
-          <NavLink to="/admin-dashboard/add-employee" className={menuClass}>
-            <FaPlus />
-            <span>Add employee</span>
           </NavLink>
         )}
 
@@ -141,32 +128,30 @@ const AdminSidebar = () => {
           </NavLink>
         )}
 
-        <GroupLabel>Company</GroupLabel>
-
-        <NavLink to="/admin-dashboard/settings" className={menuClass}>
-          <FaCogs />
-          <span>Settings</span>
-        </NavLink>
       </nav>
 
-      <div className="flex items-center justify-between gap-3 border-t border-slate-800 px-4 py-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{user?.name}</p>
-          <p className="truncate text-[11px] text-slate-400">
+      <div className="hidden items-center justify-between gap-3 border-t border-brand-950/10 px-4 py-3 lg:flex">
+        <NavLink
+          to="/admin-dashboard/account"
+          title="My account: worker profile and settings"
+          className="min-w-0 flex-1 rounded-lg px-1 py-1 transition hover:bg-brand-100"
+        >
+          <p className="truncate text-sm font-semibold text-brand-950">{user?.name}</p>
+          <p className="truncate text-[11px] text-brand-950/55">
             {roleLabel(role)} · L{roleLevel(role)}
           </p>
-        </div>
+        </NavLink>
         <button
           type="button"
           onClick={logout}
           title="Sign out"
           aria-label="Sign out"
-          className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+          className="shrink-0 rounded-lg p-2 text-brand-950/50 transition hover:bg-brand-100 hover:text-brand-950"
         >
           <FaSignOutAlt />
         </button>
       </div>
-    </aside>
+    </DrawerShell>
   );
 };
 

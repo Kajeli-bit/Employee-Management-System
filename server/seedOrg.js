@@ -23,6 +23,13 @@ const run = async () => {
 
   await mongoose.connect(dbUrl);
 
+  // On an empty database, create the company itself. It has no Managing
+  // Director yet: the first account to sign in claims it.
+  if (!(await Company.exists({}))) {
+    await Company.create({ name: "Nilric General Traders Co. LTD" });
+    console.log('Created company "Nilric General Traders Co. LTD". The first sign-in will become its Managing Director.');
+  }
+
   const companies = await Company.find().select("name head").lean();
 
   for (const company of companies) {

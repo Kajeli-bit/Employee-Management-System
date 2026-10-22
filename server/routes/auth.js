@@ -3,6 +3,7 @@ import express from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
 
 import {
+  setupStatus,
   register,
   login,
   verify,
@@ -10,6 +11,8 @@ import {
 } from "../controllers/authController.js";
 
 const router = express.Router();
+
+router.get("/setup-status", setupStatus);
 
 router.post("/register", register);
 

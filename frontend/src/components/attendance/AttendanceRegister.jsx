@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { FaChevronLeft, FaChevronRight, FaPen } from "react-icons/fa";
+import {
+  FaCheck,
+  FaChevronDown,
+  FaChevronLeft,
+  FaChevronRight,
+  FaPen,
+} from "react-icons/fa";
 
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
@@ -10,34 +17,160 @@ import {
   formatClock,
   formatDistance,
   formatDuration,
-  formatWeekdayDate,
   todayKey,
 } from "../../utils/format";
 
 const STATUSES = ["Present", "Late", "Half Day", "Absent", "On Leave"];
 
-const Stat = ({ label, value, tone = "text-slate-900" }) => (
-  <div className="px-5 py-3">
-    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-      {label}
-    </p>
-    <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${tone}`}>
-      {value}
-    </p>
-  </div>
-);
+const Stat = ({
+  label,
+  value,
+  tone = "text-slate-900",
+  active = false,
+  onClick,
+}) => {
+  const Tag = onClick ? "button" : "div";
+
+  return (
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      aria-pressed={onClick ? active : undefined}
+      className={`px-5 py-2.5 text-left ${
+        onClick
+          ? `transition hover:bg-slate-50 ${
+              active ? "bg-brand-50 ring-1 ring-inset ring-brand-300" : ""
+            }`
+          : ""
+      }`}
+    >
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+      <p className={`mt-1 font-mono text-2xl leading-none font-semibold tabular-nums ${tone}`}>
+        {value}
+      </p>
+    </Tag>
+  );
+};
+
+const DepartmentMenu = ({ value, options, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  const items = [
+    { id: "", label: "All departments" },
+    ...options
+      .filter((entry) => entry.kind !== "team")
+      .map((entry) => ({
+        id: entry._id,
+        label: entry.dep_name,
+      })),
+  ];
+  const selected = items.find((item) => item.id === value) || items[0];
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const choose = (id) => {
+    onChange(id);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="relative mt-1">
+      <button
+        type="button"
+        id="attendance-department"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-2 bg-transparent text-left text-sm font-semibold text-slate-900 outline-none transition hover:text-brand-700"
+      >
+        <span className="truncate">{selected.label}</span>
+        <FaChevronDown
+          className={`shrink-0 text-[10px] text-slate-400 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute left-[-40px] top-full z-30 mt-2 max-h-72 w-max min-w-[16rem] max-w-xs overflow-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10"
+        >
+          {items.map((item) => {
+            const isSelected = item.id === selected.id;
+
+            return (
+              <li key={item.id || "all"} role="none">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => choose(item.id)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none transition ${
+                    isSelected
+                      ? "bg-brand-50 font-semibold text-brand-800"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="whitespace-nowrap">{item.label}</span>
+                  {isSelected && (
+                    <FaCheck className="shrink-0 text-[10px] text-brand-700" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const AttendanceRegister = () => {
   const { user, getToken } = useAuth();
 
+  const [searchParams] = useSearchParams();
   const [date, setDate] = useState(todayKey());
   const [department, setDepartment] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(() => {
+    const initial = searchParams.get("status") || "";
+    return initial === "Missing" ||
+      initial === "CheckedIn" ||
+      STATUSES.includes(initial)
+      ? initial
+      : "";
+  });
   const [departments, setDepartments] = useState([]);
 
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [policy, setPolicy] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
     totalPages: 1,
@@ -102,7 +235,6 @@ const AttendanceRegister = () => {
       if (response.data.success) {
         setRows(response.data.rows || []);
         setSummary(response.data.summary);
-        setPolicy(response.data.policy);
         setPagination(response.data.pagination);
       }
     } catch (error) {
@@ -180,10 +312,47 @@ const AttendanceRegister = () => {
     }
   };
 
+  const selectStatus = (value) => {
+    setStatus(value);
+    setPage(1);
+  };
+
+  const dateInputRef = useRef(null);
+  const today = todayKey();
+  const isToday = date >= today;
+  const daysAgo = Math.round(
+    (new Date(`${today}T12:00:00`) - new Date(`${date}T12:00:00`)) / 86400000
+  );
+  const dateCaption =
+    daysAgo <= 0 ? "Today" : daysAgo === 1 ? "Yesterday" : `${daysAgo} days ago`;
+  const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const openDatePicker = () => {
+    const input = dateInputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+    } else {
+      input.focus();
+      input.click();
+    }
+  };
+
   const moveDate = (days) => {
     const next = new Date(`${date}T12:00:00`);
     next.setDate(next.getDate() + days);
-    setDate(next.toISOString().slice(0, 10));
+    const key = [
+      next.getFullYear(),
+      String(next.getMonth() + 1).padStart(2, "0"),
+      String(next.getDate()).padStart(2, "0"),
+    ].join("-");
+    if (key > today) return;
+    setDate(key);
     setPage(1);
   };
 
@@ -194,96 +363,113 @@ const AttendanceRegister = () => {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             Attendance register
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {formatWeekdayDate(`${date}T09:00:00+03:00`)}
-            {policy?.requireGeofence
-              ? " · GPS check-in required"
-              : " · GPS not enforced"}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => moveDate(-1)}
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-brand-300 hover:text-brand-700"
-            aria-label="Previous day"
-          >
-            <FaChevronLeft className="text-xs" />
-          </button>
-
-          <input
-            type="date"
-            value={date}
-            onChange={(event) => {
-              setDate(event.target.value);
-              setPage(1);
-            }}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-
-          <button
-            type="button"
-            onClick={() => moveDate(1)}
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-brand-300 hover:text-brand-700"
-            aria-label="Next day"
-          >
-            <FaChevronRight className="text-xs" />
-          </button>
         </div>
       </div>
 
-      {summary && (
-        <div className="mt-5 grid grid-cols-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-3 sm:divide-y-0 sm:divide-x lg:grid-cols-5">
-          <Stat label="On the roster" value={summary.roster} />
-          <Stat label="Checked in" value={summary.checkedIn} />
-          <Stat label="Late" value={summary.late} tone="text-amber-700" />
-          <Stat label="Half day" value={summary.halfDay} tone="text-sky-700" />
+      <div className="mt-5 grid grid-cols-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-3 sm:divide-y-0 sm:divide-x lg:grid-cols-[210px_repeat(5,minmax(0,1fr))_minmax(260px,1.5fr)]">
+          <div className="px-5 py-3">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              Department
+            </p>
+            <DepartmentMenu
+              value={department}
+              options={departments}
+              onChange={(id) => {
+                setDepartment(id);
+                setPage(1);
+              }}
+            />
+          </div>
+          <Stat
+            label="On the roster"
+            value={summary?.roster ?? "—"}
+            active={status === ""}
+            onClick={() => selectStatus("")}
+          />
+          <Stat
+            label="Checked in"
+            value={summary?.checkedIn ?? "—"}
+            active={status === "CheckedIn"}
+            onClick={() => selectStatus("CheckedIn")}
+          />
+          <Stat
+            label="Late"
+            value={summary?.late ?? "—"}
+            tone="text-amber-700"
+            active={status === "Late"}
+            onClick={() => selectStatus("Late")}
+          />
+          <Stat
+            label="Half day"
+            value={summary?.halfDay ?? "—"}
+            tone="text-sky-700"
+            active={status === "Half Day"}
+            onClick={() => selectStatus("Half Day")}
+          />
           <Stat
             label="Not checked in"
-            value={summary.notCheckedIn}
+            value={summary?.notCheckedIn ?? "—"}
             tone="text-rose-700"
+            active={status === "Missing"}
+            onClick={() => selectStatus("Missing")}
           />
+
+          <div className="col-span-2 flex min-w-0 flex-col justify-center bg-slate-50/60 px-4 py-2 sm:col-span-3 lg:col-span-1">
+            <div className="flex min-w-0 items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
+              <button
+                type="button"
+                onClick={() => moveDate(-1)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-700 active:scale-95"
+                aria-label="Previous day"
+              >
+                <FaChevronLeft className="text-sm" />
+              </button>
+              <button
+                type="button"
+                onClick={openDatePicker}
+                title="Pick a date"
+                className="group flex min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-3 py-0 transition hover:bg-brand-50"
+                aria-label={`Choose attendance date, currently ${dateLabel}`}
+              >
+                <span className="whitespace-nowrap text-base font-semibold leading-tight tracking-tight tabular-nums text-slate-900 transition group-hover:text-brand-800">
+                  {dateLabel}
+                </span>
+                <span
+                  className={`whitespace-nowrap text-[11px] leading-tight tabular-nums ${
+                    isToday ? "font-medium text-brand-700" : "text-slate-500"
+                  }`}
+                >
+                  {dateCaption}
+                </span>
+              </button>
+              <input
+                ref={dateInputRef}
+                id="attendance-date"
+                type="date"
+                tabIndex={-1}
+                aria-hidden="true"
+                value={date}
+                max={today}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!value || value > today) return;
+                  setDate(value);
+                  setPage(1);
+                }}
+                className="sr-only"
+              />
+              <button
+                type="button"
+                onClick={() => moveDate(1)}
+                disabled={isToday}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500 disabled:active:scale-100"
+                aria-label="Next day"
+              >
+                <FaChevronRight className="text-sm" />
+              </button>
+            </div>
+          </div>
         </div>
-      )}
-
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <select
-          value={department}
-          onChange={(event) => {
-            setDepartment(event.target.value);
-            setPage(1);
-          }}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500"
-        >
-          <option value="">All departments</option>
-          {departments.map((entry) => (
-            <option key={entry._id} value={entry._id}>
-              {entry.kind === "team" ? `— ${entry.dep_name}` : entry.dep_name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value);
-            setPage(1);
-          }}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500"
-        >
-          <option value="">Any status</option>
-          {STATUSES.map((entry) => (
-            <option key={entry} value={entry}>
-              {entry}
-            </option>
-          ))}
-        </select>
-
-        <span className="ml-auto text-xs text-slate-400">
-          {pagination?.total || 0} employees
-        </span>
-      </div>
 
       {error && (
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
@@ -296,8 +482,8 @@ const AttendanceRegister = () => {
           <table className="w-full min-w-[880px] text-left text-sm">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-2.5 font-semibold">Employee</th>
-                <th className="px-3 py-2.5 font-semibold">Department</th>
+                <th className="px-5 py-2.5 font-semibold">Department</th>
+                <th className="px-3 py-2.5 font-semibold">Employee</th>
                 <th className="px-3 py-2.5 font-semibold">In</th>
                 <th className="px-3 py-2.5 font-semibold">Out</th>
                 <th className="px-3 py-2.5 font-semibold">Worked</th>
@@ -333,14 +519,14 @@ const AttendanceRegister = () => {
               ) : (
                 rows.map((row) => (
                   <tr key={row.employeeId} className="text-slate-700">
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 text-xs text-slate-600">
+                      {row.department}
+                    </td>
+                    <td className="px-3 py-3">
                       <p className="font-medium text-slate-900">{row.name}</p>
                       <p className="text-xs text-slate-500">
                         {row.designation || row.role}
                       </p>
-                    </td>
-                    <td className="px-3 py-3 text-xs text-slate-600">
-                      {row.department}
                     </td>
                     <td className="px-3 py-3 font-mono">
                       {formatClock(row.record?.checkIn?.at)}
