@@ -9,6 +9,7 @@ import {
   FaTrashAlt,
 } from "react-icons/fa";
 import { useAuth } from "../../context/useAuth";
+import Loader from "../common/Loader";
 import API_URL from "../../api";
 import { formatCurrency } from "../../utils/format";
 import { canManageRole, roleLabel } from "../../utils/roles";
@@ -197,13 +198,7 @@ const View = () => {
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-5 w-32 rounded bg-slate-200" />
-          <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-            <div className="h-96 rounded-2xl bg-slate-200" />
-            <div className="h-96 rounded-2xl bg-slate-200" />
-          </div>
-        </div>
+        <Loader label="Loading employee profile…" />
       </div>
     );
   }

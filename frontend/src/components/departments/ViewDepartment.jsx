@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/useAuth";
@@ -51,7 +52,7 @@ const ViewDepartment = () => {
   }, [getToken, id]);
 
   if (loading) {
-    return <div className="px-4 pb-10 pt-10 sm:px-6">Loading ...</div>;
+    return <Loader label="Loading department…" />;
   }
 
   if (error || !department) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import axios from "axios";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
@@ -52,9 +53,7 @@ const MySalary = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-[70vh]">
-        <h2 className="text-2xl font-semibold text-gray-600">
-          Loading salary...
-        </h2>
+        <Loader label="Loading salary…" />
       </div>
     );
   }

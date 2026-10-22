@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/useAuth";
@@ -129,9 +130,7 @@ const EditDepartment = () => {
 
   if (depLoading) {
     return (
-      <div className="flex justify-center items-center mt-10">
-        <p className="text-gray-600">Loading...</p>
-      </div>
+      <Loader label="Loading department…" />
     );
   }
 

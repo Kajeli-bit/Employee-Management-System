@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import {
   CAPABILITIES,
   canManageRole,
@@ -146,10 +147,7 @@ const List = () => {
         </h2>
 
         <div className="bg-white rounded-2xl shadow-lg border p-10 text-center">
-          <div className="w-10 h-10 mx-auto border-4 border-gray-200 border-t-brand-600 rounded-full animate-spin" />
-          <p className="mt-4 text-gray-500">
-            Loading salary records...
-          </p>
+          <Loader label="Loading salary records…" />
         </div>
       </div>
     );

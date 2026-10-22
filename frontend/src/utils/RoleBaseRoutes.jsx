@@ -1,13 +1,8 @@
 import { Navigate } from "react-router-dom";
 
 import { useAuth } from "../context/useAuth";
+import Loader from "../components/common/Loader";
 import { isManagementRole } from "./roles";
-
-const Loading = () => (
-  <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
-    Loading your workspace…
-  </div>
-);
 
 // access="management" allows team leads and above.
 // access="self" is the employee portal for everyone below team lead.
@@ -15,7 +10,7 @@ const RoleBaseRoutes = ({ children, access, requiredRole }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <Loading />;
+    return <Loader label="Opening your workspace…" fullScreen />;
   }
 
   if (!user) {

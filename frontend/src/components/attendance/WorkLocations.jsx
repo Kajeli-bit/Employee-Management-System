@@ -16,6 +16,7 @@ import { LocationMap, LocationSearch } from "./LocationPicker";
 import useLocationPicker from "./useLocationPicker";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import { CAPABILITIES, hasCapability } from "../../utils/roles";
 
 const emptyLocation = {
@@ -527,9 +528,7 @@ const WorkLocations = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
-        Loading work locations…
-      </div>
+      <Loader label="Loading work locations…" />
     );
   }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import axios from "axios";
 import { useAuth } from "../../context/authContext";
 import API_URL from "../../api";
@@ -54,9 +55,7 @@ const Salary = () => {
     return (
       <div className="p-6 bg-gray-100 min-h-screen">
         <div className="max-w-5xl mx-auto">
-          <p className="text-gray-500">
-            Loading salary details...
-          </p>
+          <Loader label="Loading salary details…" />
         </div>
       </div>
     );

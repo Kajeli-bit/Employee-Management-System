@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import SummaryCard from "./SummaryCard";
+import Loader from "../common/Loader";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 import { formatCurrency } from "../../utils/format";
@@ -191,20 +192,7 @@ const AdminSummary = () => {
   }, [user, getToken, retryKey]);
 
   if (loading) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-64 rounded-lg bg-slate-200" />
-          <div className="h-40 rounded-2xl bg-slate-200" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="h-28 rounded-2xl bg-slate-200" />
-            <div className="h-28 rounded-2xl bg-slate-200" />
-            <div className="h-28 rounded-2xl bg-slate-200" />
-            <div className="h-28 rounded-2xl bg-slate-200" />
-          </div>
-        </div>
-      </div>
-    );
+    return <Loader label="Loading your dashboard…" />;
   }
 
   if (error) {

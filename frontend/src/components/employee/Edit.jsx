@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
@@ -158,7 +159,7 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
   if (loading || !initial) {
     return (
       <div className="py-16 text-center text-sm text-slate-500">
-        Loading employee profile…
+        <Loader label="Loading employee profile…" />
       </div>
     );
   }

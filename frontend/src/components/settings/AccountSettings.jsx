@@ -12,6 +12,7 @@ import API_URL from "../../api";
 import { formatDate } from "../../utils/format";
 import { roleLabel } from "../../utils/roles";
 import Settings from "./Settings";
+import Loader from "../common/Loader";
 
 const empty = (value) =>
   value === null || value === undefined || value === "" ? "—" : value;
@@ -99,11 +100,7 @@ const AccountSettings = () => {
   }, [securityOpen]);
 
   if (loading) {
-    return (
-      <div className="p-6 text-center text-sm text-slate-500">
-        Loading your account…
-      </div>
-    );
+    return <Loader label="Loading your account…" compact />;
   }
 
   if (!employee) {

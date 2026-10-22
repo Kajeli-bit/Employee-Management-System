@@ -9,6 +9,7 @@ import {
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 import { canManageRole, roleLabel } from "../../utils/roles";
+import Loader from "../common/Loader";
 import {
   buildRecordGroups,
   completenessOf,
@@ -259,14 +260,7 @@ const EmployeeDetailsModal = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {loading ? (
-            <div className="animate-pulse space-y-3">
-              <div className="h-4 w-40 rounded bg-slate-200" />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {Array.from({ length: 9 }).map((_, index) => (
-                  <div key={index} className="h-9 rounded bg-slate-100" />
-                ))}
-              </div>
-            </div>
+            <Loader label="Loading employee details…" compact />
           ) : error || !employee ? (
             <div className="py-10 text-center">
               <p className="text-sm font-semibold text-slate-900">

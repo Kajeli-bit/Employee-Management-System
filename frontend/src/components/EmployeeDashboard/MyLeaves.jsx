@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
@@ -75,9 +76,7 @@ const MyLeaves = () => {
   if (loading) {
     return (
       <div className="min-h-full bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600 font-medium">
-          Loading leaves...
-        </div>
+        <Loader label="Loading leaves…" />
       </div>
     );
   }

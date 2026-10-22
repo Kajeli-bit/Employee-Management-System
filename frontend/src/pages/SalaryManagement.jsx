@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../components/common/Loader";
 
 const SalaryManagement = () => {
   const navigate = useNavigate();
@@ -69,8 +70,8 @@ const SalaryManagement = () => {
 
       <div className="bg-white shadow rounded-lg overflow-x-auto">
         {loading ? (
-          <div className="p-6 text-center text-gray-500">
-            Loading salary records...
+          <div className="p-6">
+            <Loader label="Loading salary records..." />
           </div>
         ) : (
           <table className="w-full">

@@ -5,6 +5,7 @@ import { FaBuilding, FaSitemap, FaUsers } from "react-icons/fa";
 import { useAuth } from "../../context/useAuth";
 import { Monogram } from "../../utils/DepartmentMonogram";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import {
   NILRIC_ORG,
   ROLE_OPTIONS,
@@ -137,9 +138,7 @@ const OrgChart = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
-        Loading organisation…
-      </div>
+      <Loader label="Loading organisation…" />
     );
   }
 

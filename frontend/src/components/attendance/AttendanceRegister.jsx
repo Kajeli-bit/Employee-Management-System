@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Loader from "../common/Loader";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -504,7 +505,7 @@ const AttendanceRegister = () => {
                     colSpan={canRegularize ? 8 : 7}
                     className="px-5 py-10 text-center text-sm text-slate-500"
                   >
-                    Loading register…
+                    <Loader label="Loading register…" />
                   </td>
                 </tr>
               ) : rows.length === 0 ? (

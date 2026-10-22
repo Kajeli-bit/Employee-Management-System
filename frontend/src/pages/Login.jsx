@@ -7,6 +7,7 @@ import { Show, SignIn, useClerk, useUser } from "@clerk/react";
 import { useAuth } from "../context/useAuth";
 import API_URL from "../api";
 import { isManagementRole } from "../utils/roles";
+import Loader from "../components/common/Loader";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 read-only:bg-gray-100 read-only:text-gray-600";
@@ -53,6 +54,7 @@ const Login = () => {
   const { user, getToken, login, loading } = useAuth();
   const { user: clerkUser } = useUser();
   const clerk = useClerk();
+  const clerkLoaded = clerk.loaded;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -180,8 +182,8 @@ const Login = () => {
             backgroundSize: "18px 18px",
           }}
         >
-          <div>
-            <span className="relative inline-block rounded-2xl bg-white px-3 py-2 shadow-md sm:px-4 sm:py-2.5">
+          <div className="text-center md:text-left">
+            <span className="relative mx-auto inline-block rounded-2xl bg-white px-3 py-2 shadow-md md:mx-0 sm:px-4 sm:py-2.5">
               <img
                 src="/nilric-logo.png"
                 alt="Nilric General Traders"
@@ -193,19 +195,19 @@ const Login = () => {
               Nilric Employee Portal
             </h1>
 
-            <p className="relative mt-2 max-w-sm text-sm leading-6 text-brand-200">
+            <p className="relative mx-auto mt-2 max-w-sm text-sm leading-6 text-brand-200 md:mx-0">
               People, projects and attendance for Nilric General
               Traders.
             </p>
           </div>
 
-          <p className="relative hidden text-xs leading-5 text-brand-300 sm:block">
+          <p className="relative text-center text-xs leading-5 text-brand-300 md:text-left">
             Clock in from any Nilric site — your location is checked
             automatically.
           </p>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 md:p-7">
+        <div className="min-w-0 bg-white p-4 sm:p-6 md:p-7">
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 px-3 py-3 text-sm text-red-600">
               {error}
@@ -213,19 +215,15 @@ const Login = () => {
           )}
 
           <Show when="signed-out">
-            <div className="mb-5 text-center">
-              <h2 className="text-xl font-bold text-gray-800 sm:text-2xl">
-                Welcome back
-              </h2>
-              <p className="mt-1 text-xs text-gray-500 sm:text-sm">
-                Sign in to access your account
-              </p>
-            </div>
+            {!clerkLoaded && <Loader label="Preparing sign-in…" />}
 
-            <div className="mx-auto w-full max-w-[400px]">
+            <div
+              className={`mx-auto w-full min-w-0 max-w-[400px] ${
+                clerkLoaded ? "ems-fade-in" : "hidden"
+              }`}
+            >
               <SignIn
-                routing="path"
-                path="/login"
+                routing="virtual"
                 appearance={{
                   variables: {
                     colorPrimary: "#63358b",
@@ -234,11 +232,10 @@ const Login = () => {
                     borderRadius: "0.75rem",
                   },
                   elements: {
-                    rootBox: "w-full",
-                    cardBox: "w-full shadow-none",
-                    card: "w-full gap-5 bg-transparent p-0 shadow-none",
-                    footer: { display: "none" },
-                    footerAction: { display: "none" },
+                    rootBox: "w-full max-w-full min-w-0",
+                    cardBox: "w-full max-w-full min-w-0 shadow-none !w-full",
+                    card: "w-full max-w-full min-w-0 gap-5 bg-transparent p-0 shadow-none !w-full",
+                    headerSubtitle: { display: "none" },
                   },
                 }}
               />
@@ -247,14 +244,8 @@ const Login = () => {
 
           <Show when="signed-in">
             <div className="py-6 text-center">
-              {loading ? (
-                <p className="text-sm text-gray-600">
-                  Loading your account...
-                </p>
-              ) : user ? (
-                <p className="text-sm text-gray-600">
-                  Opening your dashboard...
-                </p>
+              {loading || user ? (
+                <Loader label="Opening your dashboard…" />
               ) : setupRequired === null ? (
                 <p className="text-sm text-gray-600">
                   Checking company setup...

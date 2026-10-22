@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
@@ -86,9 +87,7 @@ const EmployeeLeave = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center text-lg font-semibold text-gray-600">
-          Loading leave history...
-        </div>
+        <Loader label="Loading leave history…" />
       </div>
     );
   }

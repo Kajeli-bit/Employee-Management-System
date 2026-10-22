@@ -14,6 +14,7 @@ import {
 
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import {
   attendanceTone,
   formatClock,
@@ -301,9 +302,7 @@ const MyAttendance = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
-        Loading attendance…
-      </div>
+      <Loader label="Loading attendance…" />
     );
   }
 

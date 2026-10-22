@@ -8,6 +8,7 @@ import EmployeeDetailsModal from "./EmployeeDetailsModal";
 import { columns } from "../../utils/EmployeeHelper";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import {
   CAPABILITIES,
   ROLE_OPTIONS,
@@ -630,12 +631,7 @@ const List = () => {
               onChangeRowsPerPage={handlePerRowsChange}
               progressPending={empLoading}
               progressComponent={
-                <div className="flex w-full flex-col items-center gap-3 py-12 text-center">
-                  <span className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-700" />
-                  <p className="text-sm font-medium text-slate-500">
-                    Loading employees...
-                  </p>
-                </div>
+                <Loader label="Loading employees…" compact />
               }
               noDataComponent={
                 <div className="flex w-full flex-col items-center gap-2 px-6 py-12 text-center">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import axios from "axios";
 import {
   FaUser,
@@ -91,7 +92,7 @@ const Profile = () => {
   if (loading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <p className="text-sm text-slate-500">Loading your profile…</p>
+        <Loader label="Loading your profile…" />
       </div>
     );
   }

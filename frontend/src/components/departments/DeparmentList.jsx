@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Loader from "../common/Loader";
 import { FaBuilding, FaChevronRight } from "react-icons/fa";
 import AddDepartment from "./AddDepartment";
 import { Monogram } from "../../utils/DepartmentMonogram";
@@ -351,8 +352,8 @@ const DepartmentList = () => {
   return (
     <>
       {depLoading ? (
-        <div className="mx-auto flex min-h-[60vh] max-w-6xl items-center justify-center px-4 text-sm text-slate-500 sm:px-6">
-          Loading departments…
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Loader label="Loading departments…" />
         </div>
       ) : (
         <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
@@ -506,9 +507,7 @@ const DepartmentList = () => {
                 className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-xl"
               >
                 {detailLoading ? (
-                  <p className="p-6 text-sm text-slate-500 sm:p-8">
-                    Loading ...
-                  </p>
+                  <Loader label="Loading…" compact />
                 ) : detailError || !detail ? (
                   <div className="p-6 sm:p-8">
                     <div className="flex items-start justify-between gap-4">

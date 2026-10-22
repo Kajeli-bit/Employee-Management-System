@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import {
   CAPABILITIES,
   canManageRole,
@@ -305,9 +306,7 @@ const EditSalary = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600 font-semibold">
-          Loading salary details...
-        </div>
+        <Loader label="Loading salary details…" />
       </div>
     );
   }

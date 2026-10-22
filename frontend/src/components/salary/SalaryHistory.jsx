@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 
 const SalaryHistory = () => {
   const { id } = useParams();
@@ -79,9 +80,7 @@ const SalaryHistory = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center text-lg font-semibold text-gray-600">
-          Loading salary history...
-        </div>
+        <Loader label="Loading salary history…" />
       </div>
     );
   }

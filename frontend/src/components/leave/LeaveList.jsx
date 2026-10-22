@@ -4,6 +4,7 @@ import axios from "axios";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import Loader from "../common/Loader";
 import { canManageRole, isManagementRole } from "../../utils/roles";
 
 const FilterTile = ({ label, value, tone = "text-slate-900", active, onClick }) => (
@@ -211,8 +212,8 @@ const LeaveList = () => {
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-6xl items-center justify-center px-4 text-sm text-slate-500 sm:px-6">
-        Loading leave requests…
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <Loader label="Loading leave requests…" />
       </div>
     );
   }

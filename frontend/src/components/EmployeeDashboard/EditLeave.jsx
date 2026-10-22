@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Loader from "../common/Loader";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
@@ -178,9 +179,7 @@ const EditLeave = () => {
   if (loading) {
     return (
       <div className="min-h-full bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600 font-medium">
-          Loading leave details...
-        </div>
+        <Loader label="Loading leave details…" />
       </div>
     );
   }
