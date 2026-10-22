@@ -3,6 +3,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dns from "dns";
+import path from "path";
+import { fileURLToPath } from "url";
 import { clerkMiddleware } from "@clerk/express";
 
 import authRouter from "./routes/auth.js";
@@ -66,9 +68,18 @@ app.use("/api/org", orgRouter);
 // Database
 connectToDatabase();
 
-// Server
-const PORT = Number(process.env.PORT) || 5000;
+// Vercel imports the exported app as a function. Listen only when this file is
+// run directly (node index.js / npm start), so local development still works.
+const isMainModule =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (isMainModule) {
+  const PORT = Number(process.env.PORT) || 5000;
+
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+export default app;
