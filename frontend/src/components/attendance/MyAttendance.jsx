@@ -167,7 +167,7 @@ const MyAttendance = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
     try {
       const token = await getToken();
 
@@ -200,14 +200,18 @@ const MyAttendance = () => {
         error.response?.data || error.message
       );
 
-      setFeedback({
-        type: "error",
-        message:
-          error.response?.data?.error ||
-          "Unable to load your attendance right now.",
-      });
+      if (!silent) {
+        setFeedback({
+          type: "error",
+          message:
+            error.response?.data?.error ||
+            "Unable to load your attendance right now.",
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [getToken]);
 
@@ -216,6 +220,40 @@ const MyAttendance = () => {
       load();
     }
   }, [getToken, load]);
+
+  // The server can close a day from the scheduled sweep while this page stays
+  // mounted. Refresh the record periodically and when the tab becomes visible
+  // so the Out time/worked minutes show without a manual reload.
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        load({ silent: true });
+      }
+    };
+
+    const onHeartbeat = (event) => {
+      if (event.detail?.success) {
+        setToday(event.detail);
+      }
+
+      // History contains the persisted checkout, which only needs reloading
+      // when the sweep has actually closed today's record.
+      if (event.detail?.record?.checkOut) {
+        load({ silent: true });
+      }
+    };
+
+    const interval = setInterval(refreshIfVisible, 60 * 1000);
+
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("ems:attendance-refresh", onHeartbeat);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("ems:attendance-refresh", onHeartbeat);
+    };
+  }, [load]);
 
   const punch = async (direction) => {
     setBusy(true);

@@ -211,10 +211,12 @@ const AttendanceRegister = () => {
     }
   }, [getToken]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
-      setError("");
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
 
       const token = await getToken();
 
@@ -243,7 +245,9 @@ const AttendanceRegister = () => {
         error.response?.data?.error || "Unable to load attendance records."
       );
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [date, department, status, page, getToken]);
 
@@ -258,6 +262,28 @@ const AttendanceRegister = () => {
       load();
     }
   }, [getToken, load]);
+
+  // Keep the management register in sync when the scheduled server sweep
+  // closes an employee's open record while this tab is still mounted.
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        load({ silent: true });
+      }
+    };
+
+    const onAttendanceRefresh = () => load({ silent: true });
+    const interval = setInterval(refreshIfVisible, 60 * 1000);
+
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("ems:attendance-refresh", onAttendanceRefresh);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("ems:attendance-refresh", onAttendanceRefresh);
+    };
+  }, [load]);
 
   const openRegularize = (row) => {
     setEditing(row);

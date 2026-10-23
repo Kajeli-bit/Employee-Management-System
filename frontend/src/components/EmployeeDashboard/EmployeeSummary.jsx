@@ -21,6 +21,8 @@ import {
 import { roleLabel } from "../../utils/roles";
 import { useWorkspace } from "../../utils/workspace";
 
+const ATTENDANCE_REFRESH_EVENT = "ems:attendance-refresh";
+
 const clockFormatter = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
@@ -124,10 +126,31 @@ const EmployeeSummary = () => {
       }
     };
 
+    const refreshAttendance = (event) => {
+      if (event.detail?.success) {
+        setToday(event.detail);
+      } else {
+        load();
+      }
+    };
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        load();
+      }
+    };
+
+    const interval = setInterval(refreshIfVisible, 60 * 1000);
+
     load();
+    window.addEventListener(ATTENDANCE_REFRESH_EVENT, refreshAttendance);
+    document.addEventListener("visibilitychange", refreshIfVisible);
 
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener(ATTENDANCE_REFRESH_EVENT, refreshAttendance);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
     };
   }, [getToken]);
 

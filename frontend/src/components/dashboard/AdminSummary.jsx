@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import SummaryCard from "./SummaryCard";
@@ -122,6 +122,7 @@ const AdminSummary = () => {
   const [error, setError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const [now, setNow] = useState(new Date());
+  const loadedDashboardRef = useRef(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -154,9 +155,8 @@ const AdminSummary = () => {
         );
 
         if (!cancelled && response.data.success) {
-          setDashboard(
-            response.data.dashboard || {}
-          );
+          setDashboard(response.data.dashboard || {});
+          loadedDashboardRef.current = true;
         }
       } catch (fetchError) {
         if (cancelled) {
@@ -183,8 +183,21 @@ const AdminSummary = () => {
 
     fetchDashboard();
 
+    const refreshDashboard = () => {
+      if (document.visibilityState !== "visible" || !loadedDashboardRef.current) {
+        return;
+      }
+
+      fetchDashboard();
+    };
+
+    const interval = setInterval(refreshDashboard, 60 * 1000);
+    document.addEventListener("visibilitychange", refreshDashboard);
+
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshDashboard);
     };
   }, [user, getToken, retryKey]);
 
