@@ -251,8 +251,16 @@ export const updateAttendancePolicy = async (req, res) => {
     }
 
     const timePattern = /^([01]?\d|2[0-3]):[0-5]\d$/;
-    const { workStart, workEnd, graceMinutes, halfDayMinutes, requireGeofence } =
-      req.body;
+    const {
+      workStart,
+      workEnd,
+      graceMinutes,
+      halfDayMinutes,
+      requireGeofence,
+      autoClockOut,
+      earlyDepartureCheckMinutes,
+      autoClockOutConfirmMinutes,
+    } = req.body;
 
     if (workStart && !timePattern.test(workStart)) {
       return res.status(400).json({
@@ -289,6 +297,27 @@ export const updateAttendancePolicy = async (req, res) => {
 
     if (requireGeofence !== undefined) {
       update["attendance.requireGeofence"] = Boolean(requireGeofence);
+    }
+
+    // Automatic clock-out settings. The early check runs this many minutes
+    // before workEnd, the presence check this many minutes before, so the
+    // defaults put them at 15:30 and 16:45 for a 17:00 finish.
+    if (autoClockOut !== undefined) {
+      update["attendance.autoClockOut"] = Boolean(autoClockOut);
+    }
+
+    if (earlyDepartureCheckMinutes !== undefined) {
+      update["attendance.earlyDepartureCheckMinutes"] = Math.max(
+        0,
+        Math.min(480, Number(earlyDepartureCheckMinutes) || 0)
+      );
+    }
+
+    if (autoClockOutConfirmMinutes !== undefined) {
+      update["attendance.autoClockOutConfirmMinutes"] = Math.max(
+        0,
+        Math.min(240, Number(autoClockOutConfirmMinutes) || 0)
+      );
     }
 
     const company = await Company.findByIdAndUpdate(

@@ -534,6 +534,14 @@ const AttendanceRegister = () => {
                     </td>
                     <td className="px-3 py-3 font-mono">
                       {formatClock(row.record?.checkOut?.at)}
+                      {row.record?.checkOut?.automatic && (
+                        <span
+                          title={row.record.checkOut.reason}
+                          className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 font-sans text-[9px] font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          auto
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3 font-mono text-xs">
                       {row.record?.workedMinutes

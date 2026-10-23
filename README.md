@@ -82,11 +82,28 @@ graceMinutes    15
 halfDayMinutes  240
 requireGeofence true
 timezone        Africa/Dar_es_Salaam
+autoClockOut    true   (checks at 15:30 and 16:45, closes at 17:00)
 ```
 
 **Seeded head office** — `Nilric Head Office`, Plot 163/129, Apartment 107, Samora Avenue, Dar es Salaam at approximately `-6.8167, 39.2889`, radius 250 m. Replace the pin with the exact office coordinates from the Work locations screen ("Use my current location" while standing at the gate).
 
 **Regularization** — managers with `attendance.manage` can set clock-in/out times, status and a reason for any employee they manage. The record is tagged `Manual` and stores who corrected it.
+
+**Automatic clock-out** — a forgotten clock-out closes itself, driven by three checks around the end of the day (all in company time):
+
+| Check | What it does |
+| --- | --- |
+| 15:30 — early departure | The device is away from every work location → the day closes at the last time it was seen on site. Still on site → nothing. |
+| 16:45 — presence check | The device is still on site → the day is queued to close at 17:00. No position → the day stays open for review. |
+| 17:00 — close | Queued days close at exactly 17:00 and are stamped `Auto`, with the reason stored on the record. |
+
+How it gets a position: while a day is open, the employee app posts its position to `POST /api/attendance/heartbeat` every five minutes. A browser can only read a location while the page is open and permission has been granted, so a closed tab or laptop lid means no reading — the system then leaves the day open rather than guessing, and the register shows the last position it had. The last on-site reading is kept separately, which is what makes an honest departure time possible ("closed at 15:30, last seen inside at 15:12").
+
+Field and remote staff are never closed early for being away from the office. They are only closed at 17:00, and only after their device reported during the presence check.
+
+The times derive from `workEnd`, so a company finishing at 18:00 checks at 16:30, 17:45 and 18:00. Attendance policy fields: `autoClockOut` (switch), `earlyDepartureCheckMinutes` (default 90) and `autoClockOutConfirmMinutes` (default 15).
+
+**Scheduling** — every heartbeat also runs the check for that company, so an open employee app keeps the schedule moving. For days when nobody has the app open, the same check runs from a scheduler: set `CRON_SECRET` on the server, then either let the included GitHub Actions workflow call `GET /api/cron/attendance` every ten minutes (set the `ATTENDANCE_SWEEP_URL` repository variable to `https://<your-domain>/api/cron/attendance` and `ATTENDANCE_CRON_SECRET` to the same secret), or point any cron service at that URL with the same header. Vercel's own cron jobs are limited to once a day on the Hobby plan, which is why the schedule is not in `vercel.json`.
 
 ---
 
@@ -137,6 +154,9 @@ All endpoints require a Clerk session token (`Authorization: Bearer <token>`), a
 | GET | `/api/attendance/today` | Today's record, policy, active locations and the caller's attendance mode |
 | POST | `/api/attendance/check-in` | `{ latitude, longitude, accuracy }` |
 | POST | `/api/attendance/check-out` | `{ latitude, longitude, accuracy }` |
+| POST | `/api/attendance/heartbeat` | `{ latitude, longitude, accuracy }` — position report while a day is open (feeds automatic clock-out) |
+| POST | `/api/attendance/sweep` | Run the automatic clock-out check now (management) |
+| GET | `/api/cron/attendance` | Scheduled automatic clock-out check; needs `Authorization: Bearer $CRON_SECRET` |
 | GET | `/api/attendance/me?from=&to=` | Last 30 days by default, with a summary |
 | GET | `/api/attendance?date=&department=&status=` | Daily register (management, scoped) |
 | POST | `/api/attendance/mark` | Regularize/create a record |

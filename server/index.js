@@ -14,6 +14,7 @@ import salaryRouter from "./routes/salary.js";
 import leaveRoutes from "./routes/leaveRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import attendanceRouter from "./routes/attendance.js";
+import { runScheduledSweep } from "./controllers/attendanceAutomationController.js";
 import locationRouter from "./routes/locations.js";
 import orgRouter from "./routes/org.js";
 
@@ -90,6 +91,11 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/locations", locationRouter);
 app.use("/api/org", orgRouter);
+
+// Scheduled automatic clock-out check. Vercel cron (or any external scheduler)
+// calls this with the CRON_SECRET; it is idempotent, so a frequent schedule is
+// harmless.
+app.all("/api/cron/attendance", runScheduledSweep);
 
 // Database. Requests wait for this shared connection in the driver's buffer,
 // and the health route above reports it when Atlas cannot be reached.

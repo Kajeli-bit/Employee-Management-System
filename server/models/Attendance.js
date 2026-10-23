@@ -53,6 +53,67 @@ const punchSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // True when the server, not the employee, closed the day.
+    automatic: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Why the server closed the day, shown to the employee and to managers.
+    reason: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
+// The last position the signed-in app reported while the day was open. The
+// automatic clock-out rules read this instead of asking the device directly,
+// because a server can never reach a phone on its own.
+const lastSeenSchema = new mongoose.Schema(
+  {
+    at: {
+      type: Date,
+      required: true,
+    },
+
+    latitude: {
+      type: Number,
+      default: null,
+    },
+
+    longitude: {
+      type: Number,
+      default: null,
+    },
+
+    accuracyMeters: {
+      type: Number,
+      default: 0,
+    },
+
+    distanceMeters: {
+      type: Number,
+      default: null,
+    },
+
+    location: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "WorkLocation",
+      default: null,
+    },
+
+    locationName: {
+      type: String,
+      default: "",
+    },
+
+    withinGeofence: {
+      type: Boolean,
+      default: false,
+    },
   },
   { _id: false }
 );
@@ -126,6 +187,43 @@ const attendanceSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+
+    // Latest position reported by the employee's browser today.
+    lastSeen: {
+      type: lastSeenSchema,
+      default: null,
+    },
+
+    // Last position that was inside a work location, used to estimate the
+    // departure time when someone leaves the premises without clocking out.
+    lastSeenInsideAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Audit trail of the automatic clock-out checks for this day.
+    autoClockOut: {
+      evaluatedAt: {
+        type: Date,
+        default: null,
+      },
+
+      // scheduled · left-premises · no-location · none
+      outcome: {
+        type: String,
+        default: "",
+      },
+
+      reason: {
+        type: String,
+        default: "",
+      },
+
+      scheduledFor: {
+        type: Date,
+        default: null,
+      },
+    },
   },
   {
     timestamps: true,
@@ -137,6 +235,8 @@ attendanceSchema.index(
   { unique: true }
 );
 attendanceSchema.index({ companyId: 1, date: 1 });
+// The sweep looks for days that are still open, so check-out is part of the key.
+attendanceSchema.index({ companyId: 1, date: 1, checkOut: 1 });
 
 const Attendance = mongoose.model("Attendance", attendanceSchema);
 

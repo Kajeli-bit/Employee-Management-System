@@ -31,9 +31,16 @@ const DEFAULT_POLICY = {
   halfDayMinutes: 240,
   requireGeofence: true,
   weekendDays: [0, 6],
+  // Automatic clock-out: an early-departure check 90 minutes before the end of
+  // the day, a presence check 15 minutes before, and the close itself at the
+  // end of the day.
+  autoClockOut: true,
+  earlyDepartureCheckMinutes: 90,
+  autoClockOutConfirmMinutes: 15,
 };
 
-const getPolicy = (company) => ({
+// Also used by the automatic clock-out sweep, so the two never drift apart.
+export const getPolicy = (company) => ({
   ...DEFAULT_POLICY,
   ...(company?.attendance || {}),
 });
@@ -83,8 +90,26 @@ const serializeRecord = (record) => {
           distanceMeters: record.checkOut.distanceMeters,
           locationName: record.checkOut.locationName,
           withinGeofence: record.checkOut.withinGeofence,
+          automatic: Boolean(record.checkOut.automatic),
+          reason: record.checkOut.reason || "",
         }
       : null,
+    // Only meaningful while the day is still open: when the app last reported a
+    // position and whether that position was inside a work location.
+    tracking:
+      record.checkIn && !record.checkOut && record.lastSeen?.at
+        ? {
+            lastSeenAt: record.lastSeen.at,
+            locationName: record.lastSeen.locationName || "",
+            withinGeofence: Boolean(record.lastSeen.withinGeofence),
+            distanceMeters: record.lastSeen.distanceMeters ?? null,
+          }
+        : null,
+    autoClockOut: {
+      outcome: record.autoClockOut?.outcome || "",
+      reason: record.autoClockOut?.reason || "",
+      scheduledFor: record.autoClockOut?.scheduledFor || null,
+    },
   };
 };
 

@@ -256,6 +256,42 @@ const MyAttendance = () => {
   const checkedIn = Boolean(record?.checkIn);
   const checkedOut = Boolean(record?.checkOut);
 
+  // The automatic clock-out times are derived from the company policy, so a
+  // company that finishes at 18:00 sees its own times here.
+  const automation = useMemo(() => {
+    const policy = today?.policy;
+
+    if (!policy || policy.autoClockOut === false) {
+      return null;
+    }
+
+    const toMinutes = (value, fallback) => {
+      const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(
+        String(value || "").trim()
+      );
+
+      return match
+        ? Number(match[1]) * 60 + Number(match[2])
+        : fallback;
+    };
+
+    const label = (total) => {
+      const safe = Math.min(Math.max(Math.round(total), 0), 23 * 60 + 59);
+
+      return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(
+        safe % 60
+      ).padStart(2, "0")}`;
+    };
+
+    const end = toMinutes(policy.workEnd, 17 * 60);
+
+    return {
+      workEnd: label(end),
+      early: label(end - (Number(policy.earlyDepartureCheckMinutes) || 0)),
+      confirm: label(end - (Number(policy.autoClockOutConfirmMinutes) || 0)),
+    };
+  }, [today?.policy]);
+
   const clock = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
@@ -395,6 +431,14 @@ const MyAttendance = () => {
                             {record.checkIn.locationName || "Field check-in"}
                           </span>
                         </span>
+                        {!checkedOut && record.tracking?.lastSeenAt && (
+                          <span className="inline-flex items-center gap-1 text-emerald-800/80">
+                            Last position {formatClock(record.tracking.lastSeenAt)} ·{" "}
+                            {record.tracking.withinGeofence
+                              ? "on site"
+                              : "away from site"}
+                          </span>
+                        )}
                       </p>
                     </div>
                   )}
@@ -406,6 +450,14 @@ const MyAttendance = () => {
                           Clocked out at{" "}
                           <span className="font-mono">{formatClock(record.checkOut.at)}</span>
                         </span>
+                        {record.checkOut.automatic && (
+                          <span
+                            title={record.checkOut.reason}
+                            className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
+                          >
+                            Auto
+                          </span>
+                        )}
                         <span className="text-[13px] font-normal text-slate-600">
                           · worked{" "}
                           <span className="font-mono font-medium text-slate-900">
@@ -413,6 +465,11 @@ const MyAttendance = () => {
                           </span>
                         </span>
                       </p>
+                      {record.checkOut.automatic && record.checkOut.reason && (
+                        <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-500">
+                          {record.checkOut.reason}
+                        </p>
+                      )}
                     </div>
                   )}
                   {checkedIn && !checkedOut && elapsed && (
@@ -482,6 +539,29 @@ const MyAttendance = () => {
                   accepted.
                 </p>
               )}
+            </div>
+          )}
+
+          {automation && today?.employee && (
+            <div className="flex items-start gap-2 border-t border-slate-100 px-5 py-3">
+              <FaClock
+                aria-hidden="true"
+                className="mt-0.5 shrink-0 text-slate-400"
+              />
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                <span className="font-semibold text-slate-600">
+                  Auto clock-out.
+                </span>{" "}
+                While you are clocked in, this app reports your location every
+                few minutes. If you forget to clock out, the day closes at{" "}
+                <span className="font-mono font-semibold text-slate-700">
+                  {automation.workEnd}
+                </span>{" "}
+                when your device is still on site at{" "}
+                <span className="font-mono">{automation.confirm}</span>, or
+                earlier if your device leaves the premises after{" "}
+                <span className="font-mono">{automation.early}</span>.
+              </p>
             </div>
           )}
         </section>
@@ -557,6 +637,14 @@ const MyAttendance = () => {
                     </td>
                     <td className="px-3 py-3 font-mono">
                       {formatClock(entry.checkOut?.at)}
+                      {entry.checkOut?.automatic && (
+                        <span
+                          title={entry.checkOut.reason}
+                          className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          auto
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3 font-mono">
                       {entry.workedMinutes

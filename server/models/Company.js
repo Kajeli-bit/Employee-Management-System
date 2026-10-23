@@ -56,6 +56,28 @@ const companySchema = new mongoose.Schema(
         type: [Number],
         default: [0, 6],
       },
+
+      // Close the day for anyone who forgot to clock out.
+      autoClockOut: {
+        type: Boolean,
+        default: true,
+      },
+
+      // Minutes before workEnd when the device is checked for an early exit.
+      // 90 minutes puts the first check at 15:30 for a 17:00 finish.
+      earlyDepartureCheckMinutes: {
+        type: Number,
+        default: 90,
+        min: 0,
+      },
+
+      // Minutes before workEnd when the device must still be on site for the
+      // automatic clock-out at workEnd. 15 minutes puts it at 16:45.
+      autoClockOutConfirmMinutes: {
+        type: Number,
+        default: 15,
+        min: 0,
+      },
     },
   },
   {
