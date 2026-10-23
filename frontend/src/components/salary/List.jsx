@@ -142,7 +142,7 @@ const List = () => {
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto p-4">
-        <h2 className="text-2xl font-bold text-gray-800 mb-5">
+        <h2 className="font-display text-3xl font-medium tracking-tight text-brand-950 mb-5">
           Salary Management
         </h2>
 
@@ -157,7 +157,7 @@ const List = () => {
     return (
       <div className="max-w-6xl mx-auto p-4">
         <div className="flex justify-between items-center mb-5">
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h2 className="font-display text-3xl font-medium tracking-tight text-brand-950">
             Salary Management
           </h2>
 
@@ -193,7 +193,7 @@ const List = () => {
   return (
     <div className="max-w-6xl mx-auto p-4">
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-2xl font-bold text-gray-800">
+        <h2 className="font-display text-3xl font-medium tracking-tight text-brand-950">
           Salary Management
         </h2>
 

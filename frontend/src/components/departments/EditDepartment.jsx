@@ -136,7 +136,7 @@ const EditDepartment = () => {
 
   return (
     <div className="max-w-3xl mx-auto mt-10 bg-white p-8 rounded-md shadow-md w-96">
-      <h2 className="text-2xl font-bold mb-6">
+      <h2 className="font-display text-3xl font-medium tracking-tight text-brand-950 mb-6">
         Edit Department
       </h2>
 

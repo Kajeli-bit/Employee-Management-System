@@ -7,6 +7,7 @@ import EmployeeForm from "./EmployeeForm";
 import { fetchDepartments } from "../../utils/EmployeeHelper";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import { resolveRole } from "../../utils/roles";
 
 const dateOnly = (value) => (value ? String(value).slice(0, 10) : "");
 const listToText = (value) => (Array.isArray(value) ? value.join(", ") : "");
@@ -19,14 +20,17 @@ const toFormValues = (employee) => ({
   designation: employee.designation || "",
   department: employee.department?._id || "",
   salary: employee.salary ?? "",
-  role: employee.userId?.role || "employee",
+  // Legacy keys (admin, hr, tl) are shown as the role they map to.
+  role: resolveRole(employee.userId?.role) || "employee",
   reportsTo:
     employee.userId?.reportsTo?._id || employee.userId?.reportsTo || "",
   employmentType: employee.employmentType || "Full-time",
   employmentStatus: employee.employmentStatus || "Active",
   workMode: employee.workMode || "Office",
+  workLocation: employee.workLocation?._id || "",
   dateOfJoining: dateOnly(employee.dateOfJoining),
   contractEndDate: dateOnly(employee.contractEndDate),
+  probationEndDate: dateOnly(employee.probationEndDate),
   phone: employee.phone || "",
   personalEmail: employee.personalEmail || "",
   address: employee.address || "",
@@ -35,9 +39,14 @@ const toFormValues = (employee) => ({
   nationalId: employee.nationalId || "",
   tin: employee.tin || "",
   nssfNumber: employee.nssfNumber || "",
+  nhifNumber: employee.nhifNumber || "",
   bankName: employee.bankName || "",
+  bankBranch: employee.bankBranch || "",
   bankAccountName: employee.bankAccountName || "",
   bankAccountNumber: employee.bankAccountNumber || "",
+  drivingLicenceNumber: employee.drivingLicenceNumber || "",
+  passportNumber: employee.passportNumber || "",
+  workPermitExpiry: dateOnly(employee.workPermitExpiry),
   qualification: employee.qualification || "",
   fieldOfStudy: employee.fieldOfStudy || "",
   certifications: listToText(employee.certifications),
@@ -59,6 +68,8 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
   const [departments, setDepartments] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
   const [jobTitles, setJobTitles] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [roleCatalog, setRoleCatalog] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -77,6 +88,7 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
           departmentData,
           supervisorResponse,
           structure,
+          locationResponse,
         ] = await Promise.all([
           axios.get(`${API_URL}/api/employee/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -88,6 +100,9 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
           axios.get(`${API_URL}/api/org/structure`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          axios.get(`${API_URL}/api/locations`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
         if (employeeResponse.data.success) {
@@ -97,6 +112,8 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
         setDepartments(departmentData);
         setSupervisors(supervisorResponse.data.supervisors || []);
         setJobTitles(structure.data.jobTitles || []);
+        setRoleCatalog(structure.data.roles || []);
+        setLocations(locationResponse.data.locations || []);
       } catch (error) {
         alert(
           error.response?.data?.error ||
@@ -127,6 +144,10 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
       if (image) {
         formData.append("image", image);
       }
+
+      // Sent even when empty so a home site can be cleared, unlike the other
+      // optional text fields.
+      formData.set("workLocation", values.workLocation || "");
 
       const response = await axios.put(
         `${API_URL}/api/employee/${id}`,
@@ -167,11 +188,12 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
   return (
     <div className="pb-8">
       <EmployeeForm
-        mode="edit"
         initial={initial}
         departments={departments}
         supervisors={supervisors}
         jobTitles={jobTitles}
+        locations={locations}
+        roleCatalog={roleCatalog}
         submitting={submitting}
         successMessage={successMessage}
         onSubmit={handleSubmit}

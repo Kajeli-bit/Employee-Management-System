@@ -3,15 +3,25 @@ import {
   FaArrowLeft,
   FaArrowRight,
   FaCheck,
+  FaLock,
+  FaSyncAlt,
 } from "react-icons/fa";
 import {
+  CAPABILITIES,
   EMPLOYMENT_STATUSES,
   EMPLOYMENT_TYPES,
+  ROLE_OPTIONS,
   WORK_MODES,
-  assignableRoles,
-  getRole,
+  capabilityLabels,
+  groupRolesByTier,
+  hasCapability,
   roleLevel,
+  scopeLabel,
 } from "../../utils/roles";
+import {
+  parentDepartmentOf,
+  suggestSupervisorFor,
+} from "../../utils/employeeForm";
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -34,19 +44,27 @@ const STEPS = [
   },
   {
     id: "statutory",
-    title: "Statutory & qualifications",
-    description: "NIN, payroll and skills",
+    title: "Statutory & documents",
+    description: "NIN, payroll and qualifications",
+  },
+  {
+    id: "access",
+    title: "Access & review",
+    description: "What they can see, then save",
   },
 ];
 
-const REQUIRED_LABELS = {
-  name: "full name",
-  username: "username",
-  email: "work email",
-  employeeId: "employee ID",
-  department: "department or team",
-  salary: "monthly salary",
-};
+// Server catalogue entries use `key`; the bundled fallback uses `value`.
+const normaliseRole = (role) => ({
+  value: role.value ?? role.key,
+  key: role.key ?? role.value,
+  label: role.label,
+  level: role.level,
+  tier: role.tier,
+  scope: role.scope,
+  description: role.description || role.responsibilities || "",
+  capabilities: role.capabilities || [],
+});
 
 const Field = ({ label, hint, children, wide = false }) => (
   <label
@@ -70,12 +88,169 @@ const Section = ({ title, description, children }) => (
   </section>
 );
 
+// What the selected role is allowed to do, in plain language. Shown next to the
+// picker and again on the review step so nobody grants payroll by accident.
+export const RoleAccess = ({ role }) => {
+  if (!role) {
+    return null;
+  }
+
+  const permissions = capabilityLabels(role.capabilities);
+
+  return (
+    <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[13px] font-semibold text-brand-900">{role.label}</p>
+        <p className="font-mono text-[11px] text-brand-700">
+          L{role.level} · {scopeLabel(role.scope)}
+        </p>
+      </div>
+
+      {role.description && (
+        <p className="mt-0.5 text-[11px] leading-5 text-brand-900/70">
+          {role.description}
+        </p>
+      )}
+
+      {permissions.length === 0 ? (
+        <p className="mt-1.5 text-[11px] text-brand-900/60">
+          No special access — own records only.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-wrap gap-1">
+          {permissions.map((permission) => (
+            <li
+              key={permission}
+              className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-brand-800 ring-1 ring-brand-100"
+            >
+              {permission}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+// Every Nilric role is listed. Roles at or above the signed-in user's level are
+// shown but locked, so the ladder is complete and the reason is obvious.
+export const RolePicker = ({ roles, value, actorRole, onSelect }) => {
+  const actorLevel = roleLevel(actorRole);
+  const canGrant = hasCapability(actorRole, CAPABILITIES.PEOPLE_MANAGE);
+  const groups = groupRolesByTier(roles);
+  const assignable = roles.filter(
+    (role) => canGrant && actorLevel > role.level
+  ).length;
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[13px] font-medium text-slate-600">Role</span>
+        <span className="text-[11px] text-slate-400">
+          {assignable} of {roles.length} roles assignable at your level (L
+          {actorLevel})
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {groups.map((group) => (
+          <div key={group.tier}>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              {group.tier}
+            </p>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {group.roles.map((role) => {
+                const selected = value === role.value;
+                const disabled = !canGrant || actorLevel <= role.level;
+                const reason = !canGrant
+                  ? "You cannot assign roles"
+                  : `Only roles below L${actorLevel} can be assigned by you`;
+
+                return (
+                  <button
+                    key={role.value}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={selected}
+                    title={disabled ? reason : role.description}
+                    onClick={() => onSelect(role.value)}
+                    className={`rounded-xl border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+                      selected
+                        ? "border-brand-700 bg-brand-700 text-white shadow-sm"
+                        : disabled
+                          ? "cursor-not-allowed border-slate-100 bg-slate-50/70 text-slate-400"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50/40"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                          selected
+                            ? "bg-white"
+                            : disabled
+                              ? "bg-slate-300"
+                              : "bg-brand-600"
+                        }`}
+                      />
+                      <span className="truncate text-[13px] font-semibold">
+                        {role.label}
+                      </span>
+                      {disabled ? (
+                        <FaLock
+                          aria-hidden="true"
+                          className="ml-auto shrink-0 text-[10px]"
+                        />
+                      ) : selected ? (
+                        <FaCheck
+                          aria-hidden="true"
+                          className="ml-auto shrink-0 text-[10px]"
+                        />
+                      ) : null}
+                    </span>
+
+                    <span
+                      className={`mt-1 flex items-center gap-1.5 pl-3.5 text-[11px] ${
+                        selected ? "text-brand-100" : "text-slate-500"
+                      }`}
+                    >
+                      <span className="font-mono">L{role.level}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{scopeLabel(role.scope)}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-2 text-[11px] leading-5 text-slate-400">
+        Seniority is enforced by the server. Locked roles belong to people at or
+        above your level and must be created by someone more senior.
+      </p>
+    </div>
+  );
+};
+
+const SummaryRow = ({ label, value }) => (
+  <div className="min-w-0">
+    <dt className="text-[11px] text-slate-500">{label}</dt>
+    <dd className="truncate text-[13px] font-medium text-slate-900">
+      {value || "—"}
+    </dd>
+  </div>
+);
+
 const EmployeeForm = ({
-  mode = "create",
   initial = {},
   departments = [],
   supervisors = [],
   jobTitles = [],
+  locations = [],
+  roleCatalog = [],
   currentUserRole,
   submitting,
   successMessage,
@@ -83,7 +258,15 @@ const EmployeeForm = ({
   onCancel,
   submitLabel,
   bare = false,
+  // Deep links can open the form on a specific step (for example the access
+  // review) instead of always starting at identity.
+  initialStep = 0,
 }) => {
+  const startStep = Math.min(
+    Math.max(Number(initialStep) || 0, 0),
+    STEPS.length - 1
+  );
+
   const [form, setForm] = useState({
     name: "",
     username: "",
@@ -100,8 +283,10 @@ const EmployeeForm = ({
     employmentType: "Full-time",
     employmentStatus: "Active",
     workMode: "Office",
+    workLocation: "",
     dateOfJoining: "",
     contractEndDate: "",
+    probationEndDate: "",
     phone: "",
     personalEmail: "",
     address: "",
@@ -110,9 +295,14 @@ const EmployeeForm = ({
     nationalId: "",
     tin: "",
     nssfNumber: "",
+    nhifNumber: "",
     bankName: "",
+    bankBranch: "",
     bankAccountName: "",
     bankAccountNumber: "",
+    drivingLicenceNumber: "",
+    passportNumber: "",
+    workPermitExpiry: "",
     qualification: "",
     fieldOfStudy: "",
     certifications: "",
@@ -125,27 +315,20 @@ const EmployeeForm = ({
   });
 
   const [image, setImage] = useState(null);
-  const [step, setStep] = useState(0);
-  const [maxReached, setMaxReached] = useState(0);
-  const [stepError, setStepError] = useState("");
+  const [step, setStep] = useState(startStep);
+  const [maxReached, setMaxReached] = useState(startStep);
 
-  const availableRoles = useMemo(() => {
-    const roles = assignableRoles(currentUserRole);
+  // The live catalogue comes from /api/org/structure. The bundled copy is only
+  // a fallback for the first render or a failed request.
+  const roles = useMemo(() => {
+    const source = roleCatalog?.length ? roleCatalog : ROLE_OPTIONS;
 
-    if (mode === "edit" && initial.role) {
-      const existing = roles.find((role) => role.value === initial.role);
+    return source
+      .map(normaliseRole)
+      .sort((a, b) => b.level - a.level);
+  }, [roleCatalog]);
 
-      if (!existing) {
-        const current = getRole(initial.role);
-
-        if (current) {
-          roles.push({ value: current.key, label: current.label, ...current });
-        }
-      }
-    }
-
-    return roles;
-  }, [currentUserRole, initial.role, mode]);
+  const selectedRole = roles.find((role) => role.value === form.role) || null;
 
   const selectedRoleLevel = roleLevel(form.role);
 
@@ -169,29 +352,91 @@ const EmployeeForm = ({
     }));
   }, [departments]);
 
+  const selectedDepartment = departments.find(
+    (entry) => entry._id === form.department
+  );
+  const selectedParent = parentDepartmentOf(departments, form.department);
+
+  const selectedSupervisor = supervisors.find(
+    (supervisor) => supervisor._id === form.reportsTo
+  );
+  const selectedLocation = locations.find(
+    (location) => location._id === form.workLocation
+  );
+
+  // Titles suggested for the department the employee is joining, with the full
+  // catalogue as a fallback so a custom title can still be typed.
+  const designationSuggestions = useMemo(() => {
+    if (!form.department || jobTitles.length === 0) {
+      return jobTitles;
+    }
+
+    const parent = parentDepartmentOf(departments, form.department);
+    const filtered = jobTitles.filter(
+      (entry) => !parent?.key || entry.departmentKey === parent.key
+    );
+
+    return filtered.length > 0 ? filtered : jobTitles;
+  }, [form.department, departments, jobTitles]);
+
   const change = (event) => {
-    const { name, value, files } = event.target;
+    const { name, value, files, checked, type } = event.target;
 
     if (name === "image") {
       setImage(files?.[0] || null);
       return;
     }
 
+    if (type === "checkbox") {
+      setForm((current) => ({ ...current, [name]: checked }));
+      return;
+    }
+
+    if (name === "department") {
+      setForm((current) => {
+        const next = { ...current, department: value };
+
+        if (!current.reportsTo) {
+          next.reportsTo = suggestSupervisorFor({
+            departments,
+            supervisors,
+            departmentId: value,
+            role: current.role,
+          });
+        }
+
+        return next;
+      });
+      return;
+    }
+
     setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const requiredForStep = (stepIndex) => {
-    if (stepIndex === 0) {
-      return mode === "create"
-        ? ["name", "username", "email", "employeeId"]
-        : ["employeeId"];
-    }
+  const chooseRole = (nextRole) => {
+    setForm((current) => {
+      const supervisor = supervisors.find(
+        (entry) => entry._id === current.reportsTo
+      );
 
-    if (stepIndex === 1) {
-      return ["department", "salary"];
-    }
+      return {
+        ...current,
+        role: nextRole,
+        // A supervisor who is no longer senior enough is cleared rather than
+        // left in the form to be rejected on save.
+        reportsTo:
+          supervisor && supervisor.level > roleLevel(nextRole)
+            ? current.reportsTo
+            : "",
+      };
+    });
+  };
 
-    return [];
+  const generateEmployeeId = () => {
+    const year = String(new Date().getFullYear()).slice(-2);
+    const digits = String(Math.floor(1000 + Math.random() * 9000));
+
+    setForm((current) => ({ ...current, employeeId: `NIL-${year}-${digits}` }));
   };
 
   const goToStep = (index) => {
@@ -199,26 +444,15 @@ const EmployeeForm = ({
       return;
     }
 
-    if (index > maxReached) {
-      const missing = requiredForStep(step).find(
-        (field) => !String(form[field] ?? "").trim()
-      );
-
-      if (missing) {
-        setStepError(
-          `Enter the employee's ${REQUIRED_LABELS[missing]} to continue.`
-        );
-        return;
-      }
-    }
-
-    setStepError("");
     setStep(index);
     setMaxReached((reached) => Math.max(reached, index));
   };
 
+  // Nothing on the profile is mandatory once the person exists, so every step
+  // can be saved from here.
   const submit = (event) => {
     event.preventDefault();
+
     onSubmit(form, image);
   };
 
@@ -233,63 +467,46 @@ const EmployeeForm = ({
 
   const identityFields = (
     <Section
-      title={mode === "create" ? "Who is joining?" : "Identity"}
-      description={
-        mode === "create"
-          ? "The work email becomes the login for the employee portal."
-          : undefined
-      }
+      title="Identity"
+      description="How to reach this person. Their name, email and login were set when the account was created."
     >
-      {mode === "create" && (
-        <>
-          <Field label="Full name">
-            <input
-              name="name"
-              value={form.name}
-              onChange={change}
-              required
-              autoComplete="name"
-              placeholder="e.g. Amina Juma"
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label="Username">
-            <input
-              name="username"
-              value={form.username}
-              onChange={change}
-              required
-              autoComplete="username"
-              placeholder="e.g. amina.juma"
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label="Work email" hint="Used for OTP sign-in.">
-            <input
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={change}
-              required
-              autoComplete="email"
-              placeholder="name@nilric.co.tz"
-              className={inputClass}
-            />
-          </Field>
-        </>
-      )}
-
-      <Field label="Employee ID" hint="Must be unique across Nilric.">
+      <Field
+        label="Phone number"
+        hint="Used to reach the worker on site."
+      >
         <input
-          name="employeeId"
-          value={form.employeeId}
+          name="phone"
+          type="tel"
+          value={form.phone}
           onChange={change}
-          required
-          placeholder="e.g. NIL-0123"
-          className={inputClass}
+          autoComplete="tel"
+          placeholder="+255 …"
+          className={`${inputClass} font-mono`}
         />
+      </Field>
+
+      <Field
+        label="Employee ID"
+        hint="Optional — generated if left blank."
+      >
+        <span className="flex items-center gap-1.5">
+          <input
+            name="employeeId"
+            value={form.employeeId}
+            onChange={change}
+            placeholder="e.g. NIL-0123"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={generateEmployeeId}
+            title="Generate an ID you can edit"
+            className="mt-1 inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[12px] font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          >
+            <FaSyncAlt aria-hidden="true" className="text-[10px]" />
+            Generate
+          </button>
+        </span>
       </Field>
 
       <Field label="Date of birth">
@@ -333,7 +550,7 @@ const EmployeeForm = ({
 
       <Field
         label="Profile photo"
-        hint={mode === "edit" ? "Leave empty to keep the current photo." : "JPG or PNG, up to 5 MB."}
+        hint="JPG or PNG, up to 5 MB. Leave empty to keep the current photo."
       >
         <input
           name="image"
@@ -347,186 +564,236 @@ const EmployeeForm = ({
   );
 
   const positionFields = (
-    <Section
-      title="Where do they sit?"
-      description="Role sets access. The department places the person on the organisation chart."
-    >
-      <Field label="Role">
-        <select
-          name="role"
+    <>
+      <section className="border-t border-slate-100 pt-4 first:border-0 first:pt-0">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-slate-800">
+            What can they do?
+          </h2>
+          <p className="mt-0.5 text-xs leading-5 text-slate-500">
+            The role decides access. The department and job title place the
+            person on the organisation chart.
+          </p>
+        </div>
+
+        <RolePicker
+          roles={roles}
           value={form.role}
-          onChange={change}
-          required
-          className={inputClass}
-        >
-          <option value="">Select role</option>
-          {availableRoles.map((role) => (
-            <option key={role.value} value={role.value}>
-              {role.label} · L{role.level}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Designation" hint="Job title, e.g. Mechanical Engineer.">
-        <input
-          name="designation"
-          value={form.designation}
-          onChange={change}
-          list="nilric-job-titles"
-          className={inputClass}
+          actorRole={currentUserRole}
+          onSelect={chooseRole}
         />
-        <datalist id="nilric-job-titles">
-          {jobTitles.map((entry) => (
-            <option key={entry.title} value={entry.title} />
-          ))}
-        </datalist>
-      </Field>
 
-      <Field label="Department or team">
-        <select
-          name="department"
-          value={form.department}
-          onChange={change}
-          required
-          className={inputClass}
-        >
-          <option value="">Select department</option>
-          {departmentGroups.map((parent) => (
-            <optgroup key={parent._id} label={parent.dep_name}>
-              <option value={parent._id}>{parent.dep_name}</option>
-              {parent.teams.map((team) => (
-                <option key={team._id} value={team._id}>
-                  {team.dep_name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </Field>
+        <div className="mt-3">
+          <RoleAccess role={selectedRole} />
+        </div>
+      </section>
 
-      <Field
-        label="Reports to"
-        hint="Supervisor must be senior to the selected role."
-      >
-        <select
-          name="reportsTo"
-          value={form.reportsTo || ""}
-          onChange={change}
-          className={inputClass}
-        >
-          <option value="">Not set</option>
-          {supervisorOptions.map((supervisor) => (
-            <option key={supervisor._id} value={supervisor._id}>
-              {supervisor.name} · {supervisor.roleLabel}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Employment type">
-        <select
-          name="employmentType"
-          value={form.employmentType}
-          onChange={change}
-          className={inputClass}
-        >
-          {EMPLOYMENT_TYPES.map((entry) => (
-            <option key={entry} value={entry}>
-              {entry}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Employment status">
-        <select
-          name="employmentStatus"
-          value={form.employmentStatus}
-          onChange={change}
-          className={inputClass}
-        >
-          {EMPLOYMENT_STATUSES.map((entry) => (
-            <option key={entry} value={entry}>
-              {entry}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field
-        label="Attendance mode"
-        hint="Field and remote check-ins skip the geofence."
-      >
-        <select
-          name="workMode"
-          value={form.workMode}
-          onChange={change}
-          className={inputClass}
-        >
-          {WORK_MODES.map((entry) => (
-            <option key={entry} value={entry}>
-              {entry}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Date joined">
-        <input
-          name="dateOfJoining"
-          type="date"
-          value={
-            form.dateOfJoining ? String(form.dateOfJoining).slice(0, 10) : ""
+      <Section title="Where do they sit?">
+        <Field
+          label="Designation"
+          hint={
+            selectedParent
+              ? `Suggested titles for ${selectedParent.dep_name}.`
+              : "Job title, e.g. Mechanical Engineer."
           }
-          onChange={change}
-          className={inputClass}
-        />
-      </Field>
+        >
+          <input
+            name="designation"
+            value={form.designation}
+            onChange={change}
+            list="nilric-job-titles"
+            className={inputClass}
+          />
+          <datalist id="nilric-job-titles">
+            {designationSuggestions.map((entry) => (
+              <option key={entry.title} value={entry.title} />
+            ))}
+          </datalist>
+        </Field>
 
-      <Field label="Contract ends">
-        <input
-          name="contractEndDate"
-          type="date"
-          value={
-            form.contractEndDate
-              ? String(form.contractEndDate).slice(0, 10)
-              : ""
+        <Field
+          label="Department or team"
+          hint="Optional — assign it once the worker is placed."
+        >
+          <select
+            name="department"
+            value={form.department}
+            onChange={change}
+            className={inputClass}
+          >
+            <option value="">Not assigned yet</option>
+            {departmentGroups.map((parent) => (
+              <optgroup key={parent._id} label={parent.dep_name}>
+                <option value={parent._id}>{parent.dep_name}</option>
+                {parent.teams.map((team) => (
+                  <option key={team._id} value={team._id}>
+                    {team.dep_name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Reports to"
+          hint={
+            selectedDepartment
+              ? "Suggested from the department; change it if needed."
+              : "Supervisor must be senior to the selected role."
           }
-          onChange={change}
-          className={inputClass}
-        />
-      </Field>
+        >
+          <select
+            name="reportsTo"
+            value={form.reportsTo || ""}
+            onChange={change}
+            className={inputClass}
+          >
+            <option value="">Not set</option>
+            {supervisorOptions.map((supervisor) => (
+              <option key={supervisor._id} value={supervisor._id}>
+                {supervisor.name} · {supervisor.roleLabel || supervisor.role}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-      <Field label="Monthly salary (TSh)">
-        <input
-          name="salary"
-          type="number"
-          min="0"
-          value={form.salary}
-          onChange={change}
-          required
-          placeholder="e.g. 850000"
-          className={`${inputClass} font-mono`}
-        />
-      </Field>
-    </Section>
+        <Field label="Employment type">
+          <select
+            name="employmentType"
+            value={form.employmentType}
+            onChange={change}
+            className={inputClass}
+          >
+            {EMPLOYMENT_TYPES.map((entry) => (
+              <option key={entry} value={entry}>
+                {entry}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Employment status"
+          hint="Choose Probation for new hires; set the end date below."
+        >
+          <select
+            name="employmentStatus"
+            value={form.employmentStatus}
+            onChange={change}
+            className={inputClass}
+          >
+            {EMPLOYMENT_STATUSES.map((entry) => (
+              <option key={entry} value={entry}>
+                {entry}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Attendance mode"
+          hint="Field and remote check-ins skip the geofence."
+        >
+          <select
+            name="workMode"
+            value={form.workMode}
+            onChange={change}
+            className={inputClass}
+          >
+            {WORK_MODES.map((entry) => (
+              <option key={entry} value={entry}>
+                {entry}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Home site"
+          hint={
+            selectedLocation
+              ? `${selectedLocation.name}${selectedLocation.address ? ` — ${selectedLocation.address}` : ""}`
+              : "Where they normally report. GPS still accepts any Nilric site."
+          }
+        >
+          <select
+            name="workLocation"
+            value={form.workLocation || ""}
+            onChange={change}
+            className={inputClass}
+          >
+            <option value="">Not assigned</option>
+            {locations.map((location) => (
+              <option key={location._id} value={location._id}>
+                {location.name}
+                {location.isPrimary ? " (main)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Date joined">
+          <input
+            name="dateOfJoining"
+            type="date"
+            value={
+              form.dateOfJoining ? String(form.dateOfJoining).slice(0, 10) : ""
+            }
+            onChange={change}
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Probation ends">
+          <input
+            name="probationEndDate"
+            type="date"
+            value={
+              form.probationEndDate
+                ? String(form.probationEndDate).slice(0, 10)
+                : ""
+            }
+            onChange={change}
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Contract ends" hint="Leave empty for permanent staff.">
+          <input
+            name="contractEndDate"
+            type="date"
+            value={
+              form.contractEndDate
+                ? String(form.contractEndDate).slice(0, 10)
+                : ""
+            }
+            onChange={change}
+            className={inputClass}
+          />
+        </Field>
+
+        <Field
+          label="Monthly salary (TSh)"
+          hint="Optional — payroll can set it later."
+        >
+          <input
+            name="salary"
+            type="number"
+            min="0"
+            value={form.salary}
+            onChange={change}
+            placeholder="e.g. 850000"
+            className={`${inputClass} font-mono`}
+          />
+        </Field>
+      </Section>
+    </>
   );
 
   const contactsFields = (
     <>
       <Section title="How do we reach them?">
-        <Field label="Phone">
-          <input
-            name="phone"
-            value={form.phone}
-            onChange={change}
-            placeholder="+255 …"
-            autoComplete="tel"
-            className={`${inputClass} font-mono`}
-          />
-        </Field>
-
         <Field label="Personal email">
           <input
             name="personalEmail"
@@ -606,7 +873,7 @@ const EmployeeForm = ({
     <>
       <Section
         title="Statutory and payroll"
-        description="Tanzanian statutory identifiers and the bank account used for salary."
+        description="Tanzanian statutory identifiers and the account salary is paid into."
       >
         <Field label="National ID (NIN)">
           <input
@@ -635,12 +902,31 @@ const EmployeeForm = ({
           />
         </Field>
 
+        <Field label="NHIF / SHA number">
+          <input
+            name="nhifNumber"
+            value={form.nhifNumber}
+            onChange={change}
+            className={`${inputClass} font-mono`}
+          />
+        </Field>
+
         <Field label="Bank">
           <input
             name="bankName"
             value={form.bankName}
             onChange={change}
             placeholder="e.g. NMB, CRDB"
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Bank branch">
+          <input
+            name="bankBranch"
+            value={form.bankBranch}
+            onChange={change}
+            placeholder="e.g. Samora Avenue"
             className={inputClass}
           />
         </Field>
@@ -660,6 +946,43 @@ const EmployeeForm = ({
             value={form.bankAccountNumber}
             onChange={change}
             className={`${inputClass} font-mono`}
+          />
+        </Field>
+      </Section>
+
+      <Section
+        title="Identification documents"
+        description="Needed for site access, driving company vehicles and work permits."
+      >
+        <Field label="Driving licence" hint="Field engineers and drivers.">
+          <input
+            name="drivingLicenceNumber"
+            value={form.drivingLicenceNumber}
+            onChange={change}
+            className={`${inputClass} font-mono`}
+          />
+        </Field>
+
+        <Field label="Passport number">
+          <input
+            name="passportNumber"
+            value={form.passportNumber}
+            onChange={change}
+            className={`${inputClass} font-mono`}
+          />
+        </Field>
+
+        <Field label="Work permit expiry" hint="For non-Tanzanian staff.">
+          <input
+            name="workPermitExpiry"
+            type="date"
+            value={
+              form.workPermitExpiry
+                ? String(form.workPermitExpiry).slice(0, 10)
+                : ""
+            }
+            onChange={change}
+            className={inputClass}
           />
         </Field>
       </Section>
@@ -717,11 +1040,86 @@ const EmployeeForm = ({
     </>
   );
 
+  const accessFields = (
+    <>
+      <Section
+        title="Access this role grants"
+        description="Check this before saving. Access follows the role, not the person."
+      >
+        <div className="sm:col-span-2 lg:col-span-3">
+          <RoleAccess role={selectedRole} />
+        </div>
+      </Section>
+
+      <Section
+        title="Review"
+        description="This is what will be saved to the personnel file."
+      >
+        <div className="sm:col-span-2 lg:col-span-3">
+          <dl className="grid gap-x-6 gap-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <SummaryRow label="Name" value={form.name} />
+            <SummaryRow label="Work email" value={form.email} />
+            <SummaryRow label="Employee ID" value={form.employeeId} />
+            <SummaryRow
+              label="Role"
+              value={
+                selectedRole
+                  ? `${selectedRole.label} · L${selectedRole.level}`
+                  : ""
+              }
+            />
+            <SummaryRow
+              label="Department"
+              value={selectedDepartment?.dep_name}
+            />
+            <SummaryRow
+              label="Designation"
+              value={form.designation}
+            />
+            <SummaryRow
+              label="Reports to"
+              value={
+                selectedSupervisor
+                  ? `${selectedSupervisor.name} · ${selectedSupervisor.roleLabel}`
+                  : "Not set"
+              }
+            />
+            <SummaryRow
+              label="Home site"
+              value={selectedLocation?.name || "Not assigned"}
+            />
+            <SummaryRow
+              label="Employment"
+              value={`${form.employmentType} · ${form.employmentStatus}`}
+            />
+            <SummaryRow
+              label="Date joined"
+              value={form.dateOfJoining}
+            />
+            <SummaryRow
+              label="Monthly salary"
+              value={
+                form.salary
+                  ? `TSh ${Number(form.salary).toLocaleString("en-GB")}`
+                  : ""
+              }
+            />
+            <SummaryRow
+              label="Access"
+              value={scopeLabel(selectedRole?.scope)}
+            />
+          </dl>
+        </div>
+      </Section>
+    </>
+  );
+
   const stepContent = [
     identityFields,
     positionFields,
     contactsFields,
     statutoryFields,
+    accessFields,
   ][step];
 
   return (
@@ -734,7 +1132,7 @@ const EmployeeForm = ({
           : "mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-6"
       }
     >
-      <ol className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ol className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {STEPS.map((entry, index) => {
           const visited = index < step;
           const current = index === step;
@@ -769,7 +1167,7 @@ const EmployeeForm = ({
                 </span>
                 <span className="min-w-0">
                   <span
-                    className={`block truncate text-xs font-semibold sm:text-[13px] ${
+                    className={`block truncate text-xs font-semibold sm:text-[12px] ${
                       current ? "text-brand-900" : "text-slate-700"
                     }`}
                   >
@@ -801,15 +1199,6 @@ const EmployeeForm = ({
 
         <div className="space-y-4">{stepContent}</div>
       </div>
-
-      {stepError && (
-        <p
-          role="alert"
-          className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800"
-        >
-          {stepError}
-        </p>
-      )}
 
       <div className="sticky bottom-0 z-10 mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-white pb-1 pt-4">
         <div>

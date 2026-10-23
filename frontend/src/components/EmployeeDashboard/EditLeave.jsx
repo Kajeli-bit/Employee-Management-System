@@ -4,12 +4,14 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
-import { isManagementRole } from "../../utils/roles";
+import { useWorkspace } from "../../utils/workspace";
 
 const EditLeave = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, getToken } = useAuth();
+  const workspace = useWorkspace();
+  const leavesPath = workspace.leaves;
 
   const [leave, setLeave] = useState({
     leaveType: "",
@@ -48,7 +50,7 @@ const EditLeave = () => {
 
           if (data.status !== "Pending") {
             alert("Only pending leave requests can be edited.");
-            navigate("/employee-dashboard/my-leaves");
+            navigate(leavesPath);
             return;
           }
 
@@ -75,22 +77,16 @@ const EditLeave = () => {
             "Unable to fetch leave details"
         );
 
-        navigate("/employee-dashboard/my-leaves");
+        navigate(leavesPath);
       } finally {
         setLoading(false);
       }
     };
 
     if (getToken && id && user) {
-      if (isManagementRole(user.role)) {
-        alert("Only employees can edit their leave requests.");
-        navigate("/employee-dashboard/my-leaves");
-        return;
-      }
-
       fetchLeave();
     }
-  }, [id, getToken, user, navigate]);
+  }, [id, getToken, user, navigate, leavesPath]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -104,8 +100,8 @@ const EditLeave = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!user || isManagementRole(user.role)) {
-      alert("Only employees can update leave requests.");
+    if (!user) {
+      alert("Sign in again to update this leave request.");
       return;
     }
 
@@ -157,7 +153,7 @@ const EditLeave = () => {
         setSuccessMessage("Leave updated successfully!");
 
         setTimeout(() => {
-          navigate("/employee-dashboard/my-leaves");
+          navigate(leavesPath);
         }, 1200);
       }
     } catch (error) {
@@ -184,7 +180,7 @@ const EditLeave = () => {
     );
   }
 
-  if (!user || isManagementRole(user.role)) {
+  if (!user) {
     return (
       <div className="min-h-full bg-gray-50 flex items-center justify-center p-5">
         <div className="bg-white rounded-2xl shadow-md p-7 text-center">
@@ -193,7 +189,7 @@ const EditLeave = () => {
           </h2>
 
           <p className="text-sm text-gray-600">
-            Only employees can edit their leave requests.
+            Sign in again to edit your leave requests.
           </p>
         </div>
       </div>
@@ -201,10 +197,12 @@ const EditLeave = () => {
   }
 
   return (
-    <div className="min-h-full bg-gray-50 p-5">
+    <div
+      className={`p-5 ${workspace.inAdmin ? "" : "min-h-full bg-gray-50"}`}
+    >
       <div className="max-w-2xl mx-auto">
         <div className="mb-5">
-          <h1 className="text-3xl font-bold text-black">
+          <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
             Edit Leave Request
           </h1>
 
@@ -358,7 +356,7 @@ const EditLeave = () => {
               <button
                 type="button"
                 onClick={() =>
-                  navigate("/employee-dashboard/my-leaves")
+                  navigate(leavesPath)
                 }
                 className="
                   px-4

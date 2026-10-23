@@ -113,11 +113,27 @@ export const getSupervisors = async (req, res) => {
   try {
     const minimumLevel = Math.max(roleLevel(req.user.role), 60);
 
-    const users = await User.find({
-      companyId: req.user.companyId,
-    })
-      .select("name designation role")
-      .lean();
+    const [users, employees] = await Promise.all([
+      User.find({
+        companyId: req.user.companyId,
+      })
+        .select("name designation role")
+        .lean(),
+      Employee.find({
+        companyId: req.user.companyId,
+      })
+        .select("userId department")
+        .lean(),
+    ]);
+
+    // The employee record holds the department, which lets the registration
+    // form suggest the right reporting line when a department is chosen.
+    const departmentByUser = new Map(
+      employees.map((employee) => [
+        employee.userId?.toString(),
+        employee.department?.toString() || null,
+      ])
+    );
 
     const supervisors = users
       .filter(
@@ -132,6 +148,7 @@ export const getSupervisors = async (req, res) => {
         role: user.role,
         roleLabel: getRole(user.role)?.label || user.role,
         level: roleLevel(user.role),
+        department: departmentByUser.get(user._id.toString()) || null,
       }))
       .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
 

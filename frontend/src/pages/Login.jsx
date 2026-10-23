@@ -207,7 +207,7 @@ const Login = () => {
           </p>
         </div>
 
-        <div className="min-w-0 bg-white p-4 sm:p-6 md:p-7">
+        <div className="flex min-w-0 flex-col justify-center bg-white p-4 sm:p-6 md:p-7">
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 px-3 py-3 text-sm text-red-600">
               {error}
@@ -232,10 +232,13 @@ const Login = () => {
                     borderRadius: "0.75rem",
                   },
                   elements: {
-                    rootBox: "w-full max-w-full min-w-0",
+                    rootBox: "w-full max-w-full min-w-0 !w-full",
                     cardBox: "w-full max-w-full min-w-0 shadow-none !w-full",
                     card: "w-full max-w-full min-w-0 gap-5 bg-transparent p-0 shadow-none !w-full",
                     headerSubtitle: { display: "none" },
+                    // Accounts are created by HR/MD, so the sign-up prompt,
+                    // the Clerk badge and the dev-mode badge are hidden.
+                    footer: { display: "none" },
                   },
                 }}
               />

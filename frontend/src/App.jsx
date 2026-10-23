@@ -43,7 +43,6 @@ import SalaryHistory from "./components/salary/SalaryHistory";
 
 // Admin Settings
 import Settings from "./components/settings/Settings";
-import AccountSettings from "./components/settings/AccountSettings";
 
 // Attendance
 import AttendanceRegister from "./components/attendance/AttendanceRegister";
@@ -55,8 +54,6 @@ import OrgChart from "./components/org/OrgChart";
 
 // Employee Dashboard
 import EmployeeSummary from "./components/EmployeeDashboard/EmployeeSummary";
-import Profile from "./components/EmployeeDashboard/Profile";
-import MySalary from "./components/EmployeeDashboard/MySalary";
 import MyLeaves from "./components/EmployeeDashboard/MyLeaves";
 import EditLeave from "./components/EmployeeDashboard/EditLeave";
 import Setting from "./components/EmployeeDashboard/Setting";
@@ -150,9 +147,52 @@ function App() {
             element={<AttendanceRegister />}
           />
 
+          {/* My workspace: the signed-in manager's own records, inside the
+              console so they never have to switch portals. */}
+
+          <Route
+            path="my"
+            element={<EmployeeSummary />}
+          />
+
+          <Route
+            path="my/attendance"
+            element={<MyAttendance />}
+          />
+
+          <Route
+            path="my/leaves"
+            element={<MyLeaves />}
+          />
+
+          <Route
+            path="my/leaves/:id/edit"
+            element={<EditLeave />}
+          />
+
+          <Route
+            path="my/apply-leave"
+            element={<ApplyLeave />}
+          />
+
+          {/* The salary, profile and account pages were removed; old URLs land
+              on the workspace dashboard rather than a blank screen. */}
+
+          <Route
+            path="my/salary"
+            element={<Navigate to="/admin-dashboard/my" replace />}
+          />
+
+          <Route
+            path="my/profile"
+            element={<Navigate to="/admin-dashboard/my" replace />}
+          />
+
+          {/* Older links to the two pages that used to sit at the top level. */}
+
           <Route
             path="my-attendance"
-            element={<MyAttendance />}
+            element={<Navigate to="/admin-dashboard/my/attendance" replace />}
           />
 
           <Route
@@ -239,7 +279,7 @@ function App() {
 
           <Route
             path="apply-leave"
-            element={<ApplyLeave />}
+            element={<Navigate to="/admin-dashboard/my/apply-leave" replace />}
           />
 
           
@@ -251,7 +291,7 @@ function App() {
 
           <Route
             path="account"
-            element={<AccountSettings />}
+            element={<Navigate to="/admin-dashboard/my" replace />}
           />
 
         </Route>
@@ -283,13 +323,6 @@ function App() {
             element={<MyAttendance />}
           />
 
-          {/* Profile */}
-
-          <Route
-            path="profile"
-            element={<Profile />}
-          />
-
           {/* Organisation */}
 
           <Route
@@ -297,18 +330,23 @@ function App() {
             element={<OrgChart />}
           />
 
-          {/* Salary */}
-
-          <Route
-            path="salary"
-            element={<MySalary />}
-          />
-
           {/* Apply Leave */}
 
           <Route
             path="apply-leave"
             element={<ApplyLeave />}
+          />
+
+          {/* Removed pages: send old links to the dashboard. */}
+
+          <Route
+            path="salary"
+            element={<Navigate to="/employee-dashboard" replace />}
+          />
+
+          <Route
+            path="profile"
+            element={<Navigate to="/employee-dashboard" replace />}
           />
 
           {/* My Leaves */}

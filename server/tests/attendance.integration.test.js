@@ -234,8 +234,8 @@ test("clocking in replaces an absence a manager had recorded", async () => {
     companyId: company._id,
     department: finance._id,
     createdBy: head._id,
-    role: "department_manager",
-    name: "Finance Manager",
+    role: "hr",
+    name: "HR Manager",
     employeeId: "EMP-MGR-1",
   });
   const { user, employee } = await makeStaff({
@@ -290,22 +290,22 @@ test("an exited employee cannot clock in", async () => {
   assert.match(res.body.error, /Exited/);
 });
 
-test("the register a department manager sees cannot be widened by query", async () => {
+test("HR sees every department and can narrow the register by query", async () => {
   const { company, finance, operations, head } = await seedOrganisation();
 
-  const manager = await makeStaff({
+  const hr = await makeStaff({
     companyId: company._id,
     department: finance._id,
     createdBy: head._id,
-    role: "department_manager",
-    name: "Finance Manager",
+    role: "hr",
+    name: "HR Manager",
     employeeId: "EMP-FIN-MGR",
   });
 
   const financeStaff = await makeStaff({
     companyId: company._id,
     department: finance._id,
-    createdBy: manager.user._id,
+    createdBy: hr.user._id,
     name: "Finance Officer",
     employeeId: "EMP-FIN-1",
   });
@@ -318,45 +318,38 @@ test("the register a department manager sees cannot be widened by query", async 
     employeeId: "EMP-OPS-1",
   });
 
-  const res = await call(getAttendance, {
-    user: manager.user,
-    query: { department: operations._id.toString() },
-  });
+  const all = await call(getAttendance, { user: hr.user, query: {} });
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(all.statusCode, 200);
 
-  const names = res.body.rows.map((row) => row.name);
+  const names = all.body.rows.map((row) => row.name);
 
-  assert.ok(names.includes("Finance Manager"));
   assert.ok(names.includes("Finance Officer"));
-
-  assert.equal(
-    names.includes("Operations Officer"),
-    false,
-    "a department manager must not see another department"
-  );
-  assert.equal(
-    res.body.rows.some(
+  assert.ok(names.includes("Operations Officer"));
+  assert.ok(
+    all.body.rows.some(
       (row) =>
-        row.employeeId.toString() === operationsStaff.employee._id.toString()
-    ),
-    false
+        row.employeeId.toString() === financeStaff.employee._id.toString()
+    )
   );
   assert.ok(
-    res.body.rows.some(
-      (row) => row.employeeId.toString() === financeStaff.employee._id.toString()
+    all.body.rows.some(
+      (row) =>
+        row.employeeId.toString() === operationsStaff.employee._id.toString()
     )
   );
 
-  // The company head still sees everyone.
-  const companyWide = await call(getAttendance, {
-    user: head,
-    query: {},
+  // The department filter narrows the company-wide register rather than
+  // widening a scoped one.
+  const filtered = await call(getAttendance, {
+    user: hr.user,
+    query: { department: operations._id.toString() },
   });
 
-  assert.equal(companyWide.statusCode, 200);
-  assert.ok(
-    companyWide.body.rows.some((row) => row.name === "Operations Officer")
+  assert.equal(filtered.statusCode, 200);
+  assert.deepEqual(
+    filtered.body.rows.map((row) => row.name),
+    ["Operations Officer"]
   );
 });
 
@@ -374,33 +367,25 @@ test("staff cannot read the company register", async () => {
   assert.match(res.body.error, /not allowed/i);
 });
 
-test("team leads can review attendance but not regularize it", async () => {
+test("workers cannot read or regularize the company register", async () => {
   const { company, finance, head } = await seedOrganisation();
-
-  const lead = await makeStaff({
-    companyId: company._id,
-    department: finance._id,
-    createdBy: head._id,
-    role: "team_lead",
-    name: "Finance Team Lead",
-    employeeId: "EMP-TL-1",
-  });
 
   const member = await makeStaff({
     companyId: company._id,
     department: finance._id,
-    createdBy: lead.user._id,
+    createdBy: head._id,
+    role: "worker",
     name: "Finance Assistant",
     employeeId: "EMP-FIN-2",
   });
 
-  const register = await call(getAttendance, { user: lead.user, query: {} });
+  const register = await call(getAttendance, { user: member.user, query: {} });
 
-  assert.equal(register.statusCode, 200);
-  assert.ok(register.body.rows.some((row) => row.name === "Finance Assistant"));
+  assert.equal(register.statusCode, 403);
+  assert.match(register.body.error, /not allowed/i);
 
   const regularize = await call(markAttendance, {
-    user: lead.user,
+    user: member.user,
     body: {
       employeeId: member.employee._id.toString(),
       date: localDateKey(new Date()),

@@ -3,6 +3,7 @@ import {
   FaBuilding,
   FaCalendar,
   FaClock,
+  FaClipboardList,
   FaMapMarkedAlt,
   FaMoneyBillWave,
   FaSignOutAlt,
@@ -42,13 +43,17 @@ const AdminSidebar = () => {
   const showEmployees = can(CAPABILITIES.PEOPLE_VIEW);
   const showDepartments = can(CAPABILITIES.DEPARTMENTS_VIEW);
   const showLeave = can(CAPABILITIES.LEAVES_APPROVE) || can(CAPABILITIES.LEAVES_VIEW);
-  const showApplyLeave = can(CAPABILITIES.LEAVES_APPLY);
   const showSalary = can(CAPABILITIES.SALARIES_MANAGE) || can(CAPABILITIES.SALARIES_VIEW);
   const showAttendance = can(CAPABILITIES.ATTENDANCE_VIEW);
   const showLocations = can(CAPABILITIES.LOCATIONS_MANAGE);
 
   return (
-    <DrawerShell onLogout={logout} user={user} roleFooter={`${roleLabel(role)} · L${roleLevel(role)}`}>
+    <DrawerShell
+      onLogout={logout}
+      user={user}
+      roleFooter={`${roleLabel(role)} · L${roleLevel(role)}`}
+      accountHref="/admin-dashboard/settings"
+    >
       <div className="flex h-16 shrink-0 items-center border-b border-brand-950/10 bg-white px-4">
         <img
           src="/nilric-logo.png"
@@ -93,19 +98,7 @@ const AdminSidebar = () => {
           </NavLink>
         )}
 
-        {showApplyLeave && (
-          <NavLink to="/admin-dashboard/apply-leave" className={menuClass}>
-            <FaCalendar />
-            <span>Apply for leave</span>
-          </NavLink>
-        )}
-
         <GroupLabel>Operations</GroupLabel>
-
-        <NavLink to="/admin-dashboard/my-attendance" className={menuClass}>
-          <FaClock />
-          <span>My attendance</span>
-        </NavLink>
 
         {showAttendance && (
           <NavLink to="/admin-dashboard/attendance" className={menuClass}>
@@ -128,13 +121,31 @@ const AdminSidebar = () => {
           </NavLink>
         )}
 
+        {/* The manager's own records stay inside the console, so switching
+            between running the company and being an employee is one click. */}
+        <GroupLabel>My workspace</GroupLabel>
+
+        <NavLink to="/admin-dashboard/my" end className={menuClass}>
+          <FaTachometerAlt />
+          <span>My dashboard</span>
+        </NavLink>
+
+        <NavLink to="/admin-dashboard/my/attendance" className={menuClass}>
+          <FaClock />
+          <span>My attendance</span>
+        </NavLink>
+
+        <NavLink to="/admin-dashboard/my/leaves" className={menuClass}>
+          <FaClipboardList />
+          <span>My leaves</span>
+        </NavLink>
       </nav>
 
       <div className="hidden items-center justify-between gap-3 border-t border-brand-950/10 px-4 py-3 lg:flex">
         <NavLink
-          to="/admin-dashboard/account"
-          title="My account: worker profile and settings"
-          className="min-w-0 flex-1 rounded-lg px-1 py-1 transition hover:bg-brand-100"
+          to="/admin-dashboard/settings"
+          title="Login and security — change your sign-in email"
+          className="min-w-0 flex-1 rounded-lg px-1 py-1 transition hover:bg-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
         >
           <p className="truncate text-sm font-semibold text-brand-950">{user?.name}</p>
           <p className="truncate text-[11px] text-brand-950/55">

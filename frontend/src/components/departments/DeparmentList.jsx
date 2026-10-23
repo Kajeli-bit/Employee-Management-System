@@ -359,7 +359,7 @@ const DepartmentList = () => {
         <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
+              <h1 className="flex items-center gap-3 font-display text-4xl font-medium tracking-tight text-brand-950">
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-700 text-xl text-white shadow-sm">
                   <FaBuilding aria-hidden="true" />
                 </span>

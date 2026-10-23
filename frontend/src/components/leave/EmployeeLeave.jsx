@@ -122,7 +122,7 @@ const EmployeeLeave = () => {
     <div className="p-6 bg-gray-100 min-h-screen">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold text-gray-800">
+          <h2 className="font-display text-4xl font-medium tracking-tight text-brand-950">
             Employee Leave History
           </h2>
 

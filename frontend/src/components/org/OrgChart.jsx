@@ -70,7 +70,7 @@ const DepartmentCard = ({ department, tree }) => {
         </span>
       </div>
 
-      <p className="mt-1 text-xs text-slate-500">{roleLabel(department.role)}</p>
+      <p className="mt-1 text-xs text-slate-500">Reports into HR</p>
 
       {teamRows.length > 0 && (
         <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2">
@@ -144,7 +144,7 @@ const OrgChart = () => {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
-      <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
+      <h1 className="flex items-center gap-3 font-display text-4xl font-medium tracking-tight text-brand-950">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-700 text-xl text-white shadow-sm">
           <FaSitemap aria-hidden="true" />
         </span>
@@ -175,16 +175,16 @@ const OrgChart = () => {
         </section>
 
         <section className="rounded-2xl border border-slate-900 bg-slate-900 p-4 text-white">
-          <h2 className="text-sm font-semibold">Oversight</h2>
+          <h2 className="text-sm font-semibold">Workers</h2>
           <p className="mt-2 text-base font-semibold">
-            {roleLabel(NILRIC_ORG.oversight[0].role)}
+            {roleLabel("worker")}
           </p>
           <p className="mt-1 text-sm leading-6 text-slate-300">
-            {NILRIC_ORG.oversight[0].scope}. Reports directly to the General
-            Manager and keeps independent authority over safety and compliance.
+            Everyone in the departments below. Workers clock in at a Nilric
+            site, apply for leave and see their own profile and salary.
           </p>
           <p className="mt-2 font-mono text-xs text-slate-400">
-            {roleCounts[NILRIC_ORG.oversight[0].role] ?? 0} in this role
+            {roleCounts.worker ?? 0} in this role
           </p>
         </section>
       </div>

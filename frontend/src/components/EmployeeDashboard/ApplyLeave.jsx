@@ -1,85 +1,119 @@
 import { useState } from "react";
 import Loader from "../common/Loader";
 import axios from "axios";
+import { FaCheck } from "react-icons/fa";
+
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 import { CAPABILITIES, hasCapability } from "../../utils/roles";
 
-const ApplyLeave = () => {
+const LEAVE_TYPES = [
+  "Casual Leave",
+  "Sick Leave",
+  "Annual Leave",
+  "Emergency Leave",
+];
+
+const inputClass =
+  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+
+const emptyForm = {
+  leaveType: "",
+  fromDate: "",
+  toDate: "",
+  reason: "",
+};
+
+const daysBetween = (from, to) => {
+  if (!from || !to) {
+    return 0;
+  }
+
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 0;
+  }
+
+  return Math.floor((end - start) / 86400000) + 1;
+};
+
+// Used two ways: the full page at /apply-leave and inside the dialog opened
+// from the leave list. The dialog passes `bare`, `onCancel` and `onSuccess`.
+const ApplyLeave = ({ bare = false, onCancel, onSuccess }) => {
   const { user, getToken } = useAuth();
 
-  const [leave, setLeave] = useState({
-    leaveType: "",
-    fromDate: "",
-    toDate: "",
-    reason: "",
-  });
-
-  const [successMessage, setSuccessMessage] = useState("");
+  const [leave, setLeave] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
+  const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const allowedRoles = hasCapability(
-    user?.role,
-    CAPABILITIES.LEAVES_APPLY
-  );
+  const allowed = hasCapability(user?.role, CAPABILITIES.LEAVES_APPLY);
+  const days = daysBetween(leave.fromDate, leave.toDate);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const change = (event) => {
+    const { name, value } = event.target;
 
-    setLeave((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setLeave((current) => ({ ...current, [name]: value }));
+    setFeedback(null);
+
+    if (errors[name]) {
+      setErrors((current) => ({ ...current, [name]: undefined }));
+    }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const chooseType = (type) => {
+    setLeave((current) => ({ ...current, leaveType: type }));
+    setErrors((current) => ({ ...current, leaveType: undefined }));
+  };
 
-    if (!user) {
-      alert(
-        "User information not found. Please login again."
-      );
-      return;
-    }
-
-    if (!allowedRoles) {
-      alert("You are not allowed to apply for leave.");
-      return;
-    }
-
-    if (
-      leave.fromDate &&
-      leave.toDate &&
-      leave.fromDate > leave.toDate
-    ) {
-      alert(
-        "To Date cannot be earlier than From Date."
-      );
-      return;
-    }
+  const validate = () => {
+    const found = {};
 
     if (!leave.leaveType) {
-      alert("Please select a leave type.");
-      return;
+      found.leaveType = "Choose the kind of leave you need.";
+    }
+
+    if (!leave.fromDate) {
+      found.fromDate = "Pick the first day you are away.";
+    }
+
+    if (!leave.toDate) {
+      found.toDate = "Pick the last day you are away.";
+    }
+
+    if (leave.fromDate && leave.toDate && leave.fromDate > leave.toDate) {
+      found.toDate = "The last day cannot be before the first.";
     }
 
     if (!leave.reason.trim()) {
-      alert("Please enter a reason for your leave.");
+      found.reason = "Tell your manager why you need the time off.";
+    }
+
+    return found;
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (!allowed) {
+      return;
+    }
+
+    const found = validate();
+
+    setErrors(found);
+
+    if (Object.keys(found).length > 0) {
       return;
     }
 
     try {
       setLoading(true);
-      setSuccessMessage("");
+      setFeedback(null);
 
       const token = await getToken();
-
-      if (!token) {
-        alert(
-          "Authentication token not found. Please login again."
-        );
-        return;
-      }
 
       const response = await axios.post(
         `${API_URL}/api/leave/apply`,
@@ -88,39 +122,30 @@ const ApplyLeave = () => {
           reason: leave.reason.trim(),
         },
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
       if (response.data.success) {
-        setSuccessMessage(
-          "Leave request submitted successfully!"
-        );
-
-        setLeave({
-          leaveType: "",
-          fromDate: "",
-          toDate: "",
-          reason: "",
+        setLeave(emptyForm);
+        setFeedback({
+          tone: "success",
+          message: "Leave request sent for approval.",
         });
 
-        setTimeout(() => {
-          setSuccessMessage("");
-        }, 3000);
+        if (onSuccess) {
+          setTimeout(onSuccess, 1100);
+        } else {
+          setTimeout(() => setFeedback(null), 4000);
+        }
       }
     } catch (error) {
-      console.log(
-        "APPLY LEAVE ERROR:",
-        error.response?.status,
-        error.response?.data || error.message
-      );
-
-      alert(
-        error.response?.data?.error ||
-          "Failed to submit leave request"
-      );
+      setFeedback({
+        tone: "error",
+        message:
+          error.response?.data?.error ||
+          "Unable to submit the request. Try again.",
+      });
     } finally {
       setLoading(false);
     }
@@ -128,223 +153,200 @@ const ApplyLeave = () => {
 
   if (!user) {
     return (
-      <div className="min-h-full bg-gray-50 flex items-center justify-center">
+      <div className="py-10 text-center">
         <Loader label="Loading…" />
       </div>
     );
   }
 
-  if (!allowedRoles) {
+  if (!allowed) {
     return (
-      <div className="min-h-full bg-gray-50 flex items-center justify-center p-5">
-        <div className="bg-white shadow-md rounded-2xl p-7 text-center">
-          <h2 className="text-xl font-bold text-red-600 mb-2">
-            Access Denied
-          </h2>
-
-          <p className="text-gray-600 text-sm">
-            You are not allowed to apply for leave.
-          </p>
-        </div>
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-6 text-center">
+        <p className="text-sm font-semibold text-rose-700">
+          You cannot apply for leave
+        </p>
+        <p className="mt-1 text-xs text-rose-600">
+          Your role does not include leave requests. Ask HR to review your
+          access.
+        </p>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-full bg-gray-50 p-5">
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-5">
-          <h1 className="text-3xl font-bold text-black">
-            Apply for Leave
-          </h1>
+  const form = (
+    <form onSubmit={submit} noValidate className="space-y-5">
+      {feedback && (
+        <p
+          role={feedback.tone === "error" ? "alert" : "status"}
+          className={`rounded-xl px-4 py-3 text-sm font-medium ${
+            feedback.tone === "error"
+              ? "border border-rose-200 bg-rose-50 text-rose-700"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {feedback.message}
+        </p>
+      )}
 
-          <p className="text-sm text-gray-500 mt-1">
-            Submit a leave request for approval
-          </p>
-        </div>
+      <fieldset>
+        <legend className="text-sm font-medium text-slate-700">
+          Leave type
+        </legend>
 
-        <div className="bg-white rounded-2xl shadow-md p-6">
-          {successMessage && (
-            <div className="mb-5 p-3 rounded-lg bg-green-100 text-green-700 font-medium text-sm text-center">
-              {successMessage}
-            </div>
-          )}
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {LEAVE_TYPES.map((type) => {
+            const selected = leave.leaveType === type;
 
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
-            <div>
-              <label
-                htmlFor="leaveType"
-                className="block text-sm font-semibold text-gray-700 mb-1.5"
-              >
-                Leave Type
-              </label>
-
-              <select
-                id="leaveType"
-                name="leaveType"
-                value={leave.leaveType}
-                onChange={handleChange}
-                required
-                className="
-                  w-full
-                  border
-                  border-gray-300
-                  rounded-lg
-                  px-3
-                  py-2.5
-                  text-sm
-                  outline-none
-                  focus:ring-2
-                  focus:ring-brand-500
-                "
-              >
-                <option value="">
-                  Select Leave Type
-                </option>
-
-                <option value="Casual Leave">
-                  Casual Leave
-                </option>
-
-                <option value="Sick Leave">
-                  Sick Leave
-                </option>
-
-                <option value="Annual Leave">
-                  Annual Leave
-                </option>
-
-                <option value="Emergency Leave">
-                  Emergency Leave
-                </option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="fromDate"
-                  className="block text-sm font-semibold text-gray-700 mb-1.5"
-                >
-                  From Date
-                </label>
-
-                <input
-                  id="fromDate"
-                  type="date"
-                  name="fromDate"
-                  value={leave.fromDate}
-                  onChange={handleChange}
-                  max={leave.toDate || undefined}
-                  required
-                  className="
-                    w-full
-                    border
-                    border-gray-300
-                    rounded-lg
-                    px-3
-                    py-2.5
-                    text-sm
-                    outline-none
-                    focus:ring-2
-                    focus:ring-brand-500
-                  "
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="toDate"
-                  className="block text-sm font-semibold text-gray-700 mb-1.5"
-                >
-                  To Date
-                </label>
-
-                <input
-                  id="toDate"
-                  type="date"
-                  name="toDate"
-                  value={leave.toDate}
-                  onChange={handleChange}
-                  min={leave.fromDate || undefined}
-                  required
-                  className="
-                    w-full
-                    border
-                    border-gray-300
-                    rounded-lg
-                    px-3
-                    py-2.5
-                    text-sm
-                    outline-none
-                    focus:ring-2
-                    focus:ring-brand-500
-                  "
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="reason"
-                className="block text-sm font-semibold text-gray-700 mb-1.5"
-              >
-                Reason
-              </label>
-
-              <textarea
-                id="reason"
-                name="reason"
-                rows="3"
-                value={leave.reason}
-                onChange={handleChange}
-                placeholder="Enter the reason for your leave..."
-                required
-                className="
-                  w-full
-                  border
-                  border-gray-300
-                  rounded-lg
-                  px-3
-                  py-2.5
-                  text-sm
-                  outline-none
-                  resize-none
-                  focus:ring-2
-                  focus:ring-brand-500
-                "
-              />
-            </div>
-
-            <div className="pt-1">
+            return (
               <button
-                type="submit"
-                disabled={loading}
-                className="
-                  w-full
-                  bg-brand-600
-                  hover:bg-brand-700
-                  disabled:bg-gray-400
-                  disabled:cursor-not-allowed
-                  text-white
-                  px-5
-                  py-2.5
-                  rounded-lg
-                  text-sm
-                  font-semibold
-                  transition
-                "
+                key={type}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => chooseType(type)}
+                className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                  selected
+                    ? "border-brand-600 bg-brand-50 font-semibold text-brand-900 ring-1 ring-brand-600"
+                    : "border-slate-200 text-slate-700 hover:border-brand-300 hover:bg-brand-50/40"
+                }`}
               >
-                {loading
-                  ? "Submitting..."
-                  : "Submit Leave Request"}
+                {type}
+                {selected && (
+                  <FaCheck aria-hidden="true" className="text-xs text-brand-700" />
+                )}
               </button>
-            </div>
-          </form>
+            );
+          })}
         </div>
+
+        {errors.leaveType && (
+          <p role="alert" className="mt-1.5 text-xs font-medium text-rose-600">
+            {errors.leaveType}
+          </p>
+        )}
+      </fieldset>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="fromDate"
+            className="block text-sm font-medium text-slate-700"
+          >
+            First day
+          </label>
+          <input
+            id="fromDate"
+            type="date"
+            name="fromDate"
+            value={leave.fromDate}
+            onChange={change}
+            max={leave.toDate || undefined}
+            className={`${inputClass} mt-1.5 ${
+              errors.fromDate ? "border-rose-300" : ""
+            }`}
+          />
+          {errors.fromDate && (
+            <p role="alert" className="mt-1.5 text-xs font-medium text-rose-600">
+              {errors.fromDate}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="toDate"
+            className="block text-sm font-medium text-slate-700"
+          >
+            Last day
+          </label>
+          <input
+            id="toDate"
+            type="date"
+            name="toDate"
+            value={leave.toDate}
+            onChange={change}
+            min={leave.fromDate || undefined}
+            className={`${inputClass} mt-1.5 ${
+              errors.toDate ? "border-rose-300" : ""
+            }`}
+          />
+          {errors.toDate && (
+            <p role="alert" className="mt-1.5 text-xs font-medium text-rose-600">
+              {errors.toDate}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {days > 0 && (
+        <p className="-mt-2 text-xs text-slate-500">
+          <span className="font-mono font-semibold text-slate-700">{days}</span>{" "}
+          {days === 1 ? "day" : "days"} away from work.
+        </p>
+      )}
+
+      <div>
+        <label
+          htmlFor="reason"
+          className="block text-sm font-medium text-slate-700"
+        >
+          Reason
+        </label>
+        <textarea
+          id="reason"
+          name="reason"
+          rows={3}
+          value={leave.reason}
+          onChange={change}
+          placeholder="What is the time off for?"
+          className={`${inputClass} mt-1.5 resize-none ${
+            errors.reason ? "border-rose-300" : ""
+          }`}
+        />
+        {errors.reason && (
+          <p role="alert" className="mt-1.5 text-xs font-medium text-rose-600">
+            {errors.reason}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          >
+            Cancel
+          </button>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-xl bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        >
+          {loading ? "Sending…" : "Send request"}
+        </button>
+      </div>
+    </form>
+  );
+
+  if (bare) {
+    return form;
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 pb-12 pt-10 sm:px-6">
+      <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
+        Apply for leave
+      </h1>
+
+      <p className="mt-1.5 text-sm text-slate-500">
+        Your manager receives the request and approves it.
+      </p>
+
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        {form}
       </div>
     </div>
   );

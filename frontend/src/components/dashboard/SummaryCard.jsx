@@ -12,18 +12,46 @@ const TONES = {
   slate: "bg-slate-100 text-slate-600",
 };
 
-const SummaryCard = ({ icon, text, number, tone = "brand", to }) => {
+const SummaryCard = ({
+  icon,
+  text,
+  number,
+  tone = "brand",
+  to,
+  compact = false,
+}) => {
   const Wrapper = to ? NavLink : "div";
+  const padding = compact ? "px-4 py-3" : "p-4";
   const wrapperProps = to
     ? {
         to,
-        className:
-          "block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600",
+        className: `block rounded-2xl border border-slate-200 bg-white ${padding} shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600${compact ? " flex h-full items-center gap-3" : ""}`,
       }
     : {
-        className:
-          "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm",
+        className: `rounded-2xl border border-slate-200 bg-white ${padding} shadow-sm`,
       };
+
+  if (compact) {
+    return (
+      <Wrapper {...wrapperProps}>
+        <span
+          aria-hidden="true"
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base ${TONES[tone] ?? TONES.brand}`}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-slate-500">{text}</p>
+          <p className="font-mono text-xl font-semibold tabular-nums tracking-tight text-slate-900">
+            {number}
+          </p>
+        </div>
+        {to && (
+          <span className="text-xs font-medium text-brand-700">View details</span>
+        )}
+      </Wrapper>
+    );
+  }
 
   return (
     <Wrapper {...wrapperProps}>

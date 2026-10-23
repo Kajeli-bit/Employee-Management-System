@@ -8,45 +8,54 @@ A full-stack employee management system for **Nilric General Traders Company Lim
 
 | Area | Change |
 | --- | --- |
-| Roles | Replaced the generic `admin / manager / hr / tl / employee` roles with the Nilric structure: Managing Director, General Manager, Operations Manager, QSHE Officer, Department Manager, Team Lead, Employee. Permissions are level- and scope-based. |
+| Roles | Three roles: Managing Director, HR and Worker. The MD and HR run the management console; workers get a self-service portal. Retired chart roles (`general_manager`, `department_manager`, `team_lead`, `qshe_officer`, …) still resolve through a legacy map. |
 | Departments | Seeded with the 6 departments and 8 teams from the organisation chart, including a two-level department/team tree. |
 | Profiles | Employment, contact, statutory (NIN, TIN, NSSF), payroll, emergency contact and qualification fields, plus a reporting line. |
 | Attendance | GPS check-in/check-out against geofenced work locations, late/half-day rules, daily register, regularization and per-employee history. |
 | Organisation chart | A live `/organisation` page for every user, with headcounts by role and department. |
 | UI | IBM Plex typography, capability-driven navigation, TZS currency, Nilric login copy and attendance-first employee dashboard. |
+| My workspace | The management console carries the signed-in manager's own dashboard, attendance and leave records under `/admin-dashboard/my`, so clocking in or applying for leave never leaves the console. |
 
 ---
 
 ## Roles and access
 
-Levels follow the reporting lines in the organisation chart. A role can only manage roles with a lower level, and department-scoped roles only act inside their own department.
+There are two workspaces, chosen by role.
 
-| Role | Level | Scope | Can do |
+| Role | Level | Scope | Workspace |
 | --- | --- | --- | --- |
-| Managing Director | 100 | Company | Everything: people, departments, salaries, attendance, locations, policy. Cannot apply for leave (company head). |
-| General Manager | 95 | Company | Same as MD, plus leave applications. |
-| Operations Manager | 90 | Company | Company-wide people, departments, salaries, attendance, locations and policy. |
-| QSHE Officer | 85 | Company | Read-only people/departments/attendance plus compliance oversight. Independent of operations. |
-| Department Manager | 80 | Their department | Add/edit employees and leads in their department, salaries, leave approvals, attendance and regularization. |
-| Team Lead | 60 | Their department | View the team, approve leave, review attendance. No salary or hiring rights. |
-| Employee | 10 | Self | Clock in/out, apply for leave, view own profile and salary, view the org chart. |
+| Managing Director | 100 | Company | Management console **and** the worker portal. Everything: people, departments, salaries, attendance, locations, policy. The only role that can appoint HR. |
+| HR | 90 | Company | Management console **and** the worker portal. Hiring, employee records, payroll, leave approvals, attendance and policy across every department. |
+| Worker | 10 | Self | Worker portal only: dashboard, my attendance, apply for leave, my leaves, organisation chart, settings. |
 
-Capabilities are defined once in [`server/utils/roles.js`](server/utils/roles.js) and mirrored in [`frontend/src/utils/roles.js`](frontend/src/utils/roles.js) for UI gating. Legacy accounts using `admin`, `manager`, `hr` or `tl` are still recognised and mapped to their closest new role.
+`/admin-dashboard` requires the Managing Director or HR. Its sidebar ends with a **My workspace** group holding the manager's own pages: dashboard, attendance, leaves and apply for leave. They are mounted inside the console at `/admin-dashboard/my/...`, so a manager keeps the management navigation while clocking in or filing leave, and the personal pages work out of whichever shell opened them. `/employee-dashboard` is still the worker portal and stays open to every signed-in account. Workers are redirected away from management routes, and the API enforces the same rule independently.
+
+Self-service salary, profile and account pages were removed from both workspaces; salary records are managed from the console's **Salary** screen. Login security lives on the settings page, reached by clicking your name and role at the bottom of the console sidebar (and on the worker portal's **Settings** link). The `/api/salary/my-salary` and `/api/employee/profile/me` endpoints are still mounted for future use.
+
+Capabilities are defined once in [`server/utils/roles.js`](server/utils/roles.js) and mirrored in [`frontend/src/utils/roles.js`](frontend/src/utils/roles.js) for UI gating. Retired keys resolve through `LEGACY_ROLE_ALIASES`:
+
+| Retired role | Becomes |
+| --- | --- |
+| `admin` | Managing Director |
+| `general_manager`, `operations_manager`, `department_manager`, `manager` | HR |
+| `qshe_officer`, `team_lead`, `tl`, `employee` | Worker |
+
+An account still stored with a retired key keeps working immediately and is rewritten as the new key the next time its employee record is saved. To normalise every stored value at once, run `npm run migrate:roles` from `server/` (dry run) and then `npm run migrate:roles -- --apply`.
 
 **Organisation structure**
 
 ```text
 Managing Director
-└── General Manager
-    ├── QSHE Officer (oversight)
-    └── Operations Manager
-        ├── Administration & Human Resource
-        ├── Business Development ── Tender Team, Sales & Marketing Team
-        ├── Technical ICT ── Technical ICT Team
-        ├── Finance ── Finance Team
-        ├── Medical Projects ── Medical Team
-        └── Engineering ── Civil Engineering Team, Electrical & Telecommunication Team, Mechanical Engineering Team
+└── HR
+    ├── Administration & Human Resource
+    ├── Business Development ── Tender Team, Sales & Marketing Team
+    ├── Technical ICT ── Technical ICT Team
+    ├── Finance ── Finance Team
+    ├── Medical Projects ── Medical Team
+    └── Engineering ── Civil Engineering Team, Electrical & Telecommunication Team, Mechanical Engineering Team
 ```
+
+The company's real reporting lines still live on each employee's `reportsTo` field and are shown on the organisation page; the access model above is deliberately simpler than the chart.
 
 ---
 
@@ -64,7 +73,7 @@ Attendance is recorded against a **company-local date** (`Africa/Dar_es_Salaam`,
 
 **Check-out** records the exit position, computes worked minutes and marks a **Half Day** when the total is below the configured threshold. Check-out outside the fence is allowed (people leave site) but the distance is stored for review.
 
-**Default policy** (editable on the Work locations screen by MD / GM / Operations Manager):
+**Default policy** (editable on the Work locations screen by the MD or HR):
 
 ```text
 workStart       08:00
@@ -81,19 +90,35 @@ timezone        Africa/Dar_es_Salaam
 
 ---
 
+## Adding an employee
+
+Adding someone takes one screen and three fields: **full name, work email and phone number**. Nothing else is asked for.
+
+On save the server creates the Clerk login, derives the username from the email (adding `2`, `3`… when it is taken), generates the staff ID (`NIL-YY-NNNN`) and sets the role to Worker. The email becomes the sign-in address; the worker signs in with a one-time code, never a password.
+
+Everything else lives on the profile, which HR fills in from **Employees → open → Edit**. The editor keeps five steps: **Identity → Position → Contacts & emergency → Statutory & documents → Access & review**, and nothing in it is mandatory, so a record can be completed a field at a time. That is where department, supervisor, salary, home site, dates, statutory numbers and documents are added.
+
+- **Every role is listed in the editor.** The picker is grouped by tier (Executive, Management, Staff) and rendered from the server catalogue, so changing a role never requires a frontend release. Roles at or above the signed-in user's level are shown but locked with the reason: only lower levels can be created, which the server enforces independently. The MD sees all three roles; HR can change a worker's role but cannot appoint another HR account.
+- **Access preview.** Selecting a role shows its description, level, scope and the capabilities it grants (payroll, leave approval, attendance review) before the change is saved.
+- **Suggestions, not guesses.** The employee ID has a generator (`NIL-YY-NNNN`), the supervisor defaults to the most senior person in the chosen department, and designation suggestions are filtered to that department's titles.
+
 ## Employee profile fields
 
 Existing fields: employee ID, department, designation, salary, date of birth, gender, marital status, profile photo (Cloudinary).
 
 Added:
 
-- Employment: type (full-time, part-time, contract, intern, casual), status (active, probation, on leave, suspended, exited), date joined, contract end, attendance mode (office, field, remote), supervisor (`reportsTo`).
+- Employment: type (full-time, part-time, contract, intern, casual), status (active, probation, on leave, suspended, exited), date joined, probation end, contract end, attendance mode (office, field, remote), home site (`workLocation`, used for reporting — GPS attendance still accepts any active Nilric location), supervisor (`reportsTo`). Department and salary are optional on the employee record, so a worker can be onboarded with just name, email and phone and placed later.
+- The `User` still carries the old `companyScope` flag for backwards compatibility; with company-wide HR it no longer changes anyone's access.
 - Contact: phone, personal email, address, city, region.
-- Statutory and payroll: national ID (NIN), TIN, NSSF number, bank name, account name, account number.
+- Statutory and payroll: national ID (NIN), TIN, NSSF number, NHIF / SHA number, bank name, bank branch, account name, account number.
+- Identification documents: driving licence, passport number, work permit expiry.
 - Emergency contact: name, relationship, phone.
 - Qualifications: highest qualification, field of study, certifications, skills, notes.
 
 The employee's role lives on the `User` record; all other profile data lives on `Employee`. Salary records and leave records continue to reference the employee.
+
+Profile parsing (which fields are accepted, how lists and the emergency contact are shaped, and who may set the legacy visibility flag) lives in [`server/utils/employeeProfile.js`](server/utils/employeeProfile.js) and is unit-tested.
 
 ---
 
@@ -251,7 +276,8 @@ cd frontend && npm run lint         # currently reports pre-existing lint errors
 
 The repo had no test suite before. `npm test` runs Node's built-in test runner:
 
-- `tests/geo.test.js`, `tests/roles.test.js` — pure functions: haversine and fence tolerance, the Dar es Salaam calendar, role levels, capabilities and department scope.
+- `tests/geo.test.js`, `tests/roles.test.js` — pure functions: haversine and fence tolerance, the Dar es Salaam calendar, the three-role hierarchy, role capabilities, the legacy role map and which roles may assign which.
+- `tests/employeeProfile.test.js` — profile-field whitelist (payroll numbers submitted as profile data are ignored), list and emergency-contact parsing, boolean handling, the visibility rule, and that the public role catalogue carries the tier, scope and description the picker needs.
 - `tests/orgStructure.test.js` — fresh seeding plus the structure sync: six departments and eight teams for a new company, renames/reparents/prunes on a legacy company, and that units holding employees are kept.
 - `tests/departments.test.js` — department registration with teams in one call (parent links, rollback on bad input) and the detail endpoint returning its teams.
 - `tests/attendance.integration.test.js` — the real attendance controller against a temporary MongoDB (`mongodb-memory-server`), so the unique index and atomic upserts are exercised rather than mocked. Covers an in-fence check-in, a rejected fix 12 km away that stores nothing, field staff clocking in off-site, duplicate punches, check-out without check-in, half-day and full-day settlement, a GPS punch replacing a manager's absence record, exited employees, and that a department manager cannot widen their register by passing another department in the query. The test calls the controller with a fake Express request/response, so it needs no Clerk keys and no running database; the first run downloads a MongoDB binary once, which is the only step that requires network access.
@@ -263,7 +289,7 @@ The repo had no test suite before. `npm test` runs Node's built-in test runner:
 - Permissions are enforced on the server; the UI only hides what the API already rejects.
 - Company isolation: attendance, locations, employees, salaries and leaves all filter by `companyId`.
 - Browser origins: set `CLIENT_URL` in production (comma separated) to pin which sites may call the API. Left blank, any origin is allowed so localhost and LAN testing work.
-- Department isolation: department managers and team leads are pinned to their own department (including its teams) for employee, attendance, leave and salary actions.
-- The company head (Managing Director) cannot apply for leave or edit their own employee record through the admin screens.
+- Workspace isolation: workers are redirected away from `/admin-dashboard`, and every management endpoint checks a capability the worker role does not have.
+- HR cannot appoint or edit another HR account; only the Managing Director can. Neither the MD nor HR can edit their own employee record through the admin screens (profile editing is self-service).
 - GPS is a deterrent, not proof: a determined user can spoof coordinates. Add device binding, selfie verification or supervisor confirmation if attendance is used for payroll deductions. Require HTTPS in production — browsers block geolocation on insecure origins (except `localhost`).
 - Do not commit `.env` files, Clerk keys or Cloudinary secrets.

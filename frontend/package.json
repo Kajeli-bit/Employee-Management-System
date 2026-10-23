@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --port 5199 --strictPort",
     "build": "vite build",
+    "check:form": "node scripts/employee-form.check.mjs",
+    "check:access": "node scripts/access.check.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

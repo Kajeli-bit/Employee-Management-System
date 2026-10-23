@@ -20,9 +20,9 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
 
+  // Optional: onboarding only asks for name, work email and phone.
   dob: {
     type: Date,
-    required: true,
   },
 
   username: {
@@ -50,13 +50,13 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: [...ROLE_KEYS, ...LEGACY_ROLE_KEYS],
-    default: ROLES.employee.key,
+    default: ROLES.worker.key,
     required: true,
   },
 
   designation: {
     type: String,
-    required: true,
+    default: "",
     trim: true,
   },
 

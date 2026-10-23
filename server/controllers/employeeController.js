@@ -9,6 +9,7 @@ import cloudinary from "../config/cloudinary.js";
 import { clerkClient } from "@clerk/express";
 
 import Attendance from "../models/Attendance.js";
+import WorkLocation from "../models/WorkLocation.js";
 
 import {
   CAPABILITIES,
@@ -16,6 +17,7 @@ import {
   hasCapability,
   isDepartmentScoped,
   isValidRole,
+  roleFilterAliases,
   roleLevel,
 } from "../utils/roles.js";
 import {
@@ -25,78 +27,69 @@ import {
   getActorEmployee,
   visibleRoleKeys,
 } from "../utils/access.js";
+import {
+  asBoolean,
+  canGrantCompanyScope,
+  employeeIdSeed,
+  missingEmployeeEssentials,
+  parseOptionalSalary,
+  readProfileFields,
+  usernameFromEmail,
+} from "../utils/employeeProfile.js";
 
-// Fields added for the Nilric employee profile. Kept in one place so create and
-// update stay in sync.
-const PROFILE_FIELDS = [
-  "employmentType",
-  "employmentStatus",
-  "dateOfJoining",
-  "contractEndDate",
-  "workMode",
-  "phone",
-  "personalEmail",
-  "address",
-  "city",
-  "region",
-  "nationalId",
-  "tin",
-  "nssfNumber",
-  "bankName",
-  "bankAccountName",
-  "bankAccountNumber",
-  "qualification",
-  "fieldOfStudy",
-  "notes",
-];
+// Generated identifiers must not collide with an existing account.
+const uniqueUsername = async (base) => {
+  let candidate = base;
+  let suffix = 1;
 
-const splitList = (value) => {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean);
+  while (await User.exists({ username: candidate })) {
+    suffix += 1;
+    candidate = `${base}${suffix}`;
   }
 
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [];
+  return candidate;
 };
 
-const readProfileFields = (body) => {
-  const values = {};
+const uniqueEmployeeId = async () => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const candidate = employeeIdSeed();
 
-  for (const field of PROFILE_FIELDS) {
-    if (body[field] !== undefined && body[field] !== "") {
-      values[field] = body[field];
-    } else if (body[field] === "") {
-      values[field] = undefined;
+    if (!(await Employee.exists({ employeeId: candidate }))) {
+      return candidate;
     }
   }
 
-  if (body.certifications !== undefined) {
-    values.certifications = splitList(body.certifications);
+  return `NIL-${Date.now()}`;
+};
+
+// Resolves the home site a manager picked. An empty value clears the field.
+const resolveWorkLocation = async ({ value, companyId }) => {
+  if (value === undefined) {
+    return { value: undefined };
   }
 
-  if (body.skills !== undefined) {
-    values.skills = splitList(body.skills);
+  if (value === "" || value === null) {
+    return { value: null };
   }
 
-  const emergencyName = body["emergencyContact.name"];
-  const emergencyRelationship = body["emergencyContact.relationship"];
-  const emergencyPhone = body["emergencyContact.phone"];
-
-  if (emergencyName || emergencyRelationship || emergencyPhone) {
-    values.emergencyContact = {
-      name: emergencyName?.trim() || "",
-      relationship: emergencyRelationship?.trim() || "",
-      phone: emergencyPhone?.trim() || "",
-    };
+  // A malformed id would throw a cast error and surface as a 500; treat it as
+  // an unknown site instead.
+  if (!/^[0-9a-fA-F]{24}$/.test(String(value))) {
+    return { error: "Selected work location was not found in your company" };
   }
 
-  return values;
+  const location = await WorkLocation.findOne({
+    _id: value,
+    companyId,
+  })
+    .select("_id")
+    .lean();
+
+  if (!location) {
+    return { error: "Selected work location was not found in your company" };
+  }
+
+  return { value: location._id };
 };
 
 const validateReportsTo = async ({ reportsTo, companyId, targetRole }) => {
@@ -174,7 +167,11 @@ const deleteFromCloudinary = async (publicId) => {
   }
 };
 
-export const addEmployee = async (req, res) => {
+// `options.clerk` lets tests inject a Clerk double. Production callers pass
+// only the request and response, so the real client is used.
+export const addEmployee = async (req, res, options = {}) => {
+  const clerk = options.clerk || clerkClient;
+
   let clerkUserId = null;
   let clerkUserWasCreated = false;
   let profileImagePublicId = "";
@@ -187,7 +184,8 @@ export const addEmployee = async (req, res) => {
       });
     }
 
-    const requestedRole = req.body.role || "employee";
+    // Onboarding creates a worker unless a role is chosen explicitly.
+    const requestedRole = req.body.role || "worker";
 
     if (!isValidRole(requestedRole)) {
       return res.status(400).json({
@@ -217,17 +215,27 @@ export const addEmployee = async (req, res) => {
       reportsTo,
     } = req.body;
 
-    if (
-      !name ||
-      !username ||
-      !email ||
-      !employeeId ||
-      !department ||
-      salary === undefined
-    ) {
+    // Onboarding asks for a name, work email and phone number. Everything else
+    // is either generated below or can be added later.
+    const missing = missingEmployeeEssentials({
+      name,
+      email,
+      phone: req.body.phone,
+    });
+
+    if (missing.length > 0) {
       return res.status(400).json({
         success: false,
-        error: "Required employee fields are missing",
+        error: `Add the employee's ${missing.join(", ")} to create the account.`,
+      });
+    }
+
+    const salaryResult = parseOptionalSalary(salary);
+
+    if (salaryResult.error) {
+      return res.status(400).json({
+        success: false,
+        error: salaryResult.error,
       });
     }
 
@@ -247,6 +255,33 @@ export const addEmployee = async (req, res) => {
       });
     }
 
+    // Company-wide visibility is only for department-scoped roles and only
+    // leadership may hand it out.
+    const requestedCompanyScope = asBoolean(req.body.companyScope, false);
+
+    if (
+      requestedCompanyScope &&
+      !canGrantCompanyScope(req.user)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error:
+          "Only company leadership can grant company-wide visibility",
+      });
+    }
+
+    const homeSite = await resolveWorkLocation({
+      value: req.body.workLocation,
+      companyId: req.user.companyId,
+    });
+
+    if (homeSite.error) {
+      return res.status(400).json({
+        success: false,
+        error: homeSite.error,
+      });
+    }
+
     const employeeEmail = email.trim().toLowerCase();
 
     const userExists = await User.findOne({
@@ -260,46 +295,62 @@ export const addEmployee = async (req, res) => {
       });
     }
 
-    const usernameExists = await User.findOne({
-      username: username.trim(),
-    });
+    // A username can be typed in, but is otherwise derived from the work email.
+    const providedUsername = String(username || "").trim();
+    let finalUsername = providedUsername || usernameFromEmail(employeeEmail);
 
-    if (usernameExists) {
-      return res.status(400).json({
-        success: false,
-        error: "Username already exists",
-      });
+    if (providedUsername) {
+      if (await User.exists({ username: providedUsername })) {
+        return res.status(400).json({
+          success: false,
+          error: "Username already exists",
+        });
+      }
+    } else {
+      finalUsername = await uniqueUsername(finalUsername);
     }
 
-    const employeeIdExists = await Employee.findOne({
-      employeeId: employeeId.trim(),
-    });
+    // Same for the staff ID.
+    const providedEmployeeId = String(employeeId || "").trim();
+    let finalEmployeeId = providedEmployeeId;
 
-    if (employeeIdExists) {
-      return res.status(400).json({
-        success: false,
-        error: "Employee ID already exists",
-      });
+    if (providedEmployeeId) {
+      if (await Employee.exists({ employeeId: providedEmployeeId })) {
+        return res.status(400).json({
+          success: false,
+          error: "Employee ID already exists",
+        });
+      }
+    } else {
+      finalEmployeeId = await uniqueEmployeeId();
     }
 
-    const departmentExists = await Department.findOne({
-      _id: department,
-      companyId: req.user.companyId,
-    });
+    // The department is optional: a new worker can be placed later.
+    let verifiedDepartment = null;
 
-    if (!departmentExists) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid department",
+    if (department) {
+      const departmentExists = await Department.findOne({
+        _id: department,
+        companyId: req.user.companyId,
       });
+
+      if (!departmentExists) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid department",
+        });
+      }
+
+      verifiedDepartment = departmentExists._id;
     }
 
     // Department managers can only add people into their own department.
     if (
-        isDepartmentScoped(req.user.role) &&
-        !req.user.companyScope &&
-        actorEmployee
-      ) {
+      verifiedDepartment &&
+      isDepartmentScoped(req.user.role) &&
+      !req.user.companyScope &&
+      actorEmployee
+    ) {
       const allowedDepartments = await departmentWithChildren(
         actorEmployee.department,
         req.user.companyId
@@ -307,7 +358,7 @@ export const addEmployee = async (req, res) => {
 
       if (
         !allowedDepartments.some(
-          (id) => id.toString() === departmentExists._id.toString()
+          (id) => id.toString() === verifiedDepartment.toString()
         )
       ) {
         return res.status(403).json({
@@ -319,7 +370,7 @@ export const addEmployee = async (req, res) => {
 
     try {
       const existingClerkUsers =
-        await clerkClient.users.getUserList({
+        await clerk.users.getUserList({
           emailAddress: [employeeEmail],
         });
 
@@ -337,7 +388,7 @@ export const addEmployee = async (req, res) => {
         );
       } else {
         const clerkUser =
-          await clerkClient.users.createUser({
+          await clerk.users.createUser({
             emailAddress: [employeeEmail],
             firstName: name.trim(),
             skipPasswordRequirement: true,
@@ -392,7 +443,7 @@ export const addEmployee = async (req, res) => {
           clerkUserWasCreated
         ) {
           try {
-            await clerkClient.users.deleteUser(
+            await clerk.users.deleteUser(
               clerkUserId
             );
           } catch (deleteError) {
@@ -418,7 +469,7 @@ export const addEmployee = async (req, res) => {
 
       name: name.trim(),
 
-      username: username.trim(),
+      username: finalUsername,
 
       email: employeeEmail,
 
@@ -431,6 +482,8 @@ export const addEmployee = async (req, res) => {
       dob,
 
       reportsTo: supervisor.value,
+
+      companyScope: requestedCompanyScope,
 
       profileImage,
 
@@ -458,7 +511,7 @@ export const addEmployee = async (req, res) => {
         clerkUserWasCreated
       ) {
         try {
-          await clerkClient.users.deleteUser(
+          await clerk.users.deleteUser(
             clerkUserId
           );
         } catch (deleteError) {
@@ -480,7 +533,7 @@ export const addEmployee = async (req, res) => {
 
         createdBy: req.user._id,
 
-        employeeId: employeeId.trim(),
+        employeeId: finalEmployeeId,
 
         dob,
 
@@ -490,9 +543,11 @@ export const addEmployee = async (req, res) => {
 
         designation: designation?.trim() || "",
 
-        department,
+        department: verifiedDepartment,
 
-        salary: Number(salary),
+        salary: salaryResult.value,
+
+        workLocation: homeSite.value ?? null,
 
         ...profile,
       });
@@ -519,7 +574,7 @@ export const addEmployee = async (req, res) => {
         clerkUserWasCreated
       ) {
         try {
-          await clerkClient.users.deleteUser(
+          await clerk.users.deleteUser(
             clerkUserId
           );
         } catch (deleteError) {
@@ -538,6 +593,8 @@ export const addEmployee = async (req, res) => {
       message:
         "User created successfully. User can login using the registered email and OTP.",
       employeeEmail,
+      employeeId: finalEmployeeId,
+      username: finalUsername,
       role: requestedRole,
     });
   } catch (error) {
@@ -611,7 +668,9 @@ export const getEmployees = async (req, res) => {
         });
       }
 
-      userQuery.role = roleFilter;
+      // Accounts created before the three-role model still store a retired key,
+      // so filtering by "HR" must also match a stored department_manager.
+      userQuery.role = { $in: roleFilterAliases(roleFilter) };
     }
 
     if (search) {
@@ -704,6 +763,7 @@ export const getEmployees = async (req, res) => {
           "-password"
         )
         .populate("department")
+        .populate("workLocation", "name")
         .sort({
           createdAt: -1,
         })
@@ -780,6 +840,8 @@ export const getEmployees = async (req, res) => {
 
           dateOfJoining: emp.dateOfJoining || null,
 
+          workLocation: emp.workLocation?.name || "",
+
           reportsTo: emp.userId?.reportsTo || null,
         })
       );
@@ -836,7 +898,8 @@ export const getEmployee = async (
       })
         .populate("userId", "-password")
         .populate("userId.reportsTo", "name designation role")
-        .populate("department");
+        .populate("department")
+        .populate("workLocation", "name address radiusMeters isActive");
 
     if (!employee) {
       return res.status(404).json({
@@ -1037,6 +1100,29 @@ export const updateEmployee = async (
       });
     }
 
+    const canSetCompanyScope = canGrantCompanyScope(req.user);
+    const requestedCompanyScope = asBoolean(req.body.companyScope, false);
+
+    if (requestedCompanyScope && !canSetCompanyScope) {
+      return res.status(403).json({
+        success: false,
+        error:
+          "Only company leadership can grant company-wide visibility",
+      });
+    }
+
+    const homeSite = await resolveWorkLocation({
+      value: req.body.workLocation,
+      companyId: req.user.companyId,
+    });
+
+    if (homeSite.error) {
+      return res.status(400).json({
+        success: false,
+        error: homeSite.error,
+      });
+    }
+
     let newProfileImage =
       employee.userId.profileImage ||
       "";
@@ -1107,6 +1193,10 @@ export const updateEmployee = async (
       employee[field] = value;
     }
 
+    if (homeSite.value !== undefined) {
+      employee.workLocation = homeSite.value;
+    }
+
     employee.updatedAt =
       new Date();
 
@@ -1141,6 +1231,12 @@ export const updateEmployee = async (
 
         profileImagePublicId:
           newProfileImagePublicId,
+
+        // Only leadership edits this flag, so a department manager saving the
+        // form cannot silently drop a grant someone else made.
+        ...(canSetCompanyScope && req.body.companyScope !== undefined
+          ? { companyScope: requestedCompanyScope }
+          : {}),
 
         updatedAt: new Date(),
       }
@@ -1331,7 +1427,8 @@ export const getEmployeeProfile = async (
       })
         .populate("userId", "-password")
         .populate("userId.reportsTo", "name designation role")
-        .populate("department");
+        .populate("department")
+        .populate("workLocation", "name address");
 
     if (!employee) {
       return res.status(404).json({
@@ -1396,6 +1493,14 @@ export const getEmployeeProfile = async (
 
         contractEndDate: employee.contractEndDate,
 
+        probationEndDate: employee.probationEndDate || null,
+
+        workLocation: employee.workLocation?._id || null,
+
+        workLocationName: employee.workLocation?.name || "",
+
+        companyScope: Boolean(employee.userId.companyScope),
+
         phone: employee.phone || "",
 
         personalEmail: employee.personalEmail || "",
@@ -1412,11 +1517,21 @@ export const getEmployeeProfile = async (
 
         nssfNumber: employee.nssfNumber || "",
 
+        nhifNumber: employee.nhifNumber || "",
+
         bankName: employee.bankName || "",
+
+        bankBranch: employee.bankBranch || "",
 
         bankAccountName: employee.bankAccountName || "",
 
         bankAccountNumber: employee.bankAccountNumber || "",
+
+        drivingLicenceNumber: employee.drivingLicenceNumber || "",
+
+        passportNumber: employee.passportNumber || "",
+
+        workPermitExpiry: employee.workPermitExpiry || null,
 
         emergencyContact: employee.emergencyContact || {},
 

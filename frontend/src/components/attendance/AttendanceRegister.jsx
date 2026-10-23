@@ -361,7 +361,7 @@ const AttendanceRegister = () => {
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950 sm:text-5xl">
             Attendance register
           </h1>
         </div>

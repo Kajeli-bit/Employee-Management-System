@@ -4,8 +4,9 @@ import { useAuth } from "../context/useAuth";
 import Loader from "../components/common/Loader";
 import { isManagementRole } from "./roles";
 
-// access="management" allows team leads and above.
-// access="self" is the employee portal for everyone below team lead.
+// access="management" is the Managing Director / HR console.
+// access="self" is the worker portal, open to every signed-in account — MD and
+// HR are allowed to use both workspaces.
 const RoleBaseRoutes = ({ children, access, requiredRole }) => {
   const { user, loading } = useAuth();
 
@@ -23,10 +24,6 @@ const RoleBaseRoutes = ({ children, access, requiredRole }) => {
 
   if (access === "management" && !isManagementRole(user.role)) {
     return <Navigate to="/employee-dashboard" replace />;
-  }
-
-  if (access === "self" && isManagementRole(user.role)) {
-    return <Navigate to="/admin-dashboard" replace />;
   }
 
   return children;

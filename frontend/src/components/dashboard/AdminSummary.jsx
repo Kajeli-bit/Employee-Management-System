@@ -5,13 +5,10 @@ import SummaryCard from "./SummaryCard";
 import Loader from "../common/Loader";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
-import { formatCurrency } from "../../utils/format";
 import { roleLabel } from "../../utils/roles";
 
 import {
-  FaUsers,
   FaBuilding,
-  FaMoneyBillWave,
   FaFileAlt,
   FaCheckCircle,
   FaChevronRight,
@@ -79,22 +76,22 @@ const LedgerRow = ({ label, value, dot, onClick, glowColor }) => (
     type="button"
     onClick={onClick}
     style={glowColor ? { "--alert-glow": glowColor } : undefined}
-    className={`flex w-full items-center justify-between gap-4 rounded-lg py-2 text-left first:pt-0 last:pb-0 transition hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-white ${glowColor ? "alert-blink" : ""}`}
+    className={`flex w-full items-center justify-between gap-4 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3 text-left transition hover:border-white/30 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white ${glowColor ? "alert-blink" : ""}`}
   >
-    <span className="flex items-center gap-2 text-lg font-medium text-white">
+    <span className="flex items-center gap-3 text-xl font-semibold text-white">
       <span
         aria-hidden="true"
-        className={`h-1.5 w-1.5 rounded-full ${dot}`}
+        className={`h-2.5 w-2.5 rounded-full ${dot}`}
       />
       {label}
     </span>
-    <span className="flex items-center gap-2">
-      <span className="font-mono text-lg font-semibold tabular-nums text-white">
+    <span className="flex items-center gap-3">
+      <span className="font-display text-4xl font-medium tabular-nums leading-none text-white">
         {value}
       </span>
       <FaChevronRight
         aria-hidden="true"
-        className="text-xs text-brand-300"
+        className="text-sm text-brand-300"
       />
     </span>
   </button>
@@ -263,26 +260,17 @@ const AdminSummary = () => {
     <div className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            {greeting} {roleLabel(user?.role)}
+          <p className="text-xs font-medium text-brand-700">{todayLabel}</p>
+          <h1 className="mt-1 font-display text-4xl font-medium tracking-tight text-brand-950 sm:text-5xl">
+            {greeting}, {roleLabel(user?.role)}
           </h1>
         </div>
-        <p className="inline-flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-          <FaUsers aria-hidden="true" className="text-brand-600" />
-          <span className="font-mono text-2xl font-bold tabular-nums tracking-tight text-slate-900">
-            {dashboard.totalEmployees}
-          </span>
-          <span className="text-sm font-medium text-slate-500">
-            {dashboard.totalEmployees === 1 ? "person" : "people"} on
-            the system
-          </span>
-        </p>
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <section
           aria-label="Attendance today"
-          className="overflow-hidden rounded-2xl bg-brand-950 text-white shadow-sm lg:col-span-2"
+          className="relative overflow-hidden rounded-2xl bg-brand-950 text-white shadow-lg shadow-brand-950/20 ring-1 ring-inset ring-amber-300/25 lg:col-span-2"
         >
           <div
             className="flex h-full flex-col justify-between gap-6 p-5 sm:flex-row sm:items-center sm:p-6"
@@ -297,7 +285,7 @@ const AdminSummary = () => {
                 <FaClock aria-hidden="true" />
                 Checked in today
               </p>
-              <p className="mt-1 font-mono text-5xl font-semibold tabular-nums tracking-tight sm:text-6xl">
+              <p className="mt-1 font-display text-7xl font-medium tabular-nums tracking-tight sm:text-8xl">
                 {checkedIn}
               </p>
               <div className="mx-auto mt-3 max-w-[220px]">
@@ -322,7 +310,7 @@ const AdminSummary = () => {
                 </p>
               </div>
             </div>
-            <dl className="w-full max-w-xs divide-y divide-white/10 border-t border-white/10 sm:w-64 sm:border-l sm:border-t-0 sm:pl-6">
+            <dl className="flex w-full max-w-sm flex-col gap-3 border-t border-white/10 sm:w-96 sm:border-l sm:border-t-0 sm:pl-6">
               <div className="py-1">
                 <LedgerRow
                   label="Late arrivals"
@@ -372,13 +360,9 @@ const AdminSummary = () => {
           </div>
         </section>
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-2 gap-4 lg:h-full lg:grid-cols-1 lg:grid-rows-3">
+          <div className="flex flex-col justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <p className="flex items-center gap-2 text-sm text-slate-500">
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse"
-              />
               Current time
             </p>
             <p className="mt-1 font-mono text-xl font-semibold tabular-nums tracking-tight text-slate-900 sm:text-2xl">
@@ -388,7 +372,7 @@ const AdminSummary = () => {
               East Africa Time
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <p className="text-sm text-slate-500">Today</p>
             <p className="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
               {dayFormatter.format(now)}
@@ -397,48 +381,23 @@ const AdminSummary = () => {
               {dateFormatter.format(now)}
             </p>
           </div>
-        </div>
-      </div>
-
-      <section aria-label="Workforce" className="mt-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard
-            icon={<FaUsers />}
-            text="People on the system"
-            number={dashboard.totalEmployees}
-            tone="brand"
-            to="/admin-dashboard/employees"
-          />
           <SummaryCard
             icon={<FaBuilding />}
             text="Departments"
             number={dashboard.totalDepartments}
             tone="brand"
             to="/admin-dashboard/departments"
-          />
-          <SummaryCard
-            icon={<FaMoneyBillWave />}
-            text="Salary records"
-            number={dashboard.totalSalaryRecords}
-            tone="brand"
-            to="/admin-dashboard/salary"
-          />
-          <SummaryCard
-            icon={<FaMoneyBillWave />}
-            text="Total salary paid"
-            number={formatCurrency(dashboard.totalSalaryPaid)}
-            tone="emerald"
-            to="/admin-dashboard/salary"
+            compact
           />
         </div>
-      </section>
+      </div>
 
       <section
         aria-label="Leave statistics"
         className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
       >
         <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
+          <h2 className="flex items-center gap-2 font-display text-xl font-medium tracking-tight text-brand-950">
             <FaFileAlt aria-hidden="true" className="text-brand-600" />
             Leave applications
           </h2>
@@ -456,7 +415,7 @@ const AdminSummary = () => {
                 className={`h-2 w-2 shrink-0 rounded-full ${state.dot}`}
               />
               <div className="min-w-0 flex-1">
-                <p className="font-mono text-xl font-semibold tabular-nums text-slate-900">
+                <p className="font-display text-3xl font-medium tabular-nums text-brand-950">
                   {state.value}
                 </p>
                 <p className="truncate text-xs text-slate-500">

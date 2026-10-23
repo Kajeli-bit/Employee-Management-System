@@ -4,6 +4,7 @@
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
 
   /* Nilric brand purple, sampled from the company profile:
      700 is the panel purple, 800 the heading purple. */

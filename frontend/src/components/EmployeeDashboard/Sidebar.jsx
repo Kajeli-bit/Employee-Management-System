@@ -1,15 +1,15 @@
 import { NavLink } from "react-router-dom";
 import {
-  FaCalendarAlt,
   FaClipboardList,
   FaClock,
   FaCogs,
-  FaMoneyBillWave,
   FaSitemap,
   FaTachometerAlt,
-  FaUser,
+  FaUsers,
 } from "react-icons/fa";
 import DrawerShell from "../ui/DrawerShell";
+import { useAuth } from "../../context/useAuth";
+import { isManagementRole } from "../../utils/roles";
 
 const menuClass = ({ isActive }) =>
   `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
@@ -19,6 +19,8 @@ const menuClass = ({ isActive }) =>
   }`;
 
 const Sidebar = () => {
+  const { user } = useAuth();
+
   return (
     <DrawerShell>
       <div className="flex h-16 shrink-0 items-center border-b border-brand-950/10 bg-white px-4">
@@ -40,24 +42,9 @@ const Sidebar = () => {
           <span>My attendance</span>
         </NavLink>
 
-        <NavLink to="/employee-dashboard/profile" className={menuClass}>
-          <FaUser size={16} />
-          <span>My profile</span>
-        </NavLink>
-
-        <NavLink to="/employee-dashboard/apply-leave" className={menuClass}>
-          <FaCalendarAlt size={16} />
-          <span>Apply for leave</span>
-        </NavLink>
-
         <NavLink to="/employee-dashboard/my-leaves" className={menuClass}>
           <FaClipboardList size={16} />
           <span>My leaves</span>
-        </NavLink>
-
-        <NavLink to="/employee-dashboard/salary" className={menuClass}>
-          <FaMoneyBillWave size={16} />
-          <span>My salary</span>
         </NavLink>
 
         <NavLink to="/employee-dashboard/organisation" className={menuClass}>
@@ -69,6 +56,19 @@ const Sidebar = () => {
           <FaCogs size={16} />
           <span>Settings</span>
         </NavLink>
+
+        {/* MD and HR can use both workspaces. */}
+        {isManagementRole(user?.role) && (
+          <>
+            <p className="mt-5 mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-brand-950/45">
+              Management
+            </p>
+            <NavLink to="/admin-dashboard" className={menuClass}>
+              <FaUsers size={16} />
+              <span>Management console</span>
+            </NavLink>
+          </>
+        )}
       </nav>
     </DrawerShell>
   );

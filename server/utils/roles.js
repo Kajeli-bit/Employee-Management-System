@@ -1,8 +1,15 @@
-// Single source of truth for Nilric General Traders' role structure.
-// Levels mirror the reporting lines in the organisation chart: the Managing
-// Director sits at the top, the General Manager and Operations Manager below,
-// department managers report to Operations, team leads report to a department
-// manager, and everyone else is staff.
+// Single source of truth for Nilric General Traders' access model.
+//
+// The company runs on three roles:
+//   Managing Director — owns the company and signs off on everything.
+//   HR                — runs people operations across every department.
+//   Worker            — everyone else: clocks in, applies for leave, sees their
+//                       own profile, salary and the organisation chart.
+//
+// The previous seven-role chart (GM, Operations Manager, QSHE Officer,
+// Department Manager, Team Lead) has been retired. Its role keys are still
+// accepted so existing accounts keep resolving, and are mapped to their closest
+// equivalent below.
 
 export const CAPABILITIES = {
   PEOPLE_MANAGE: "people.manage",
@@ -21,9 +28,10 @@ export const CAPABILITIES = {
   SETTINGS_MANAGE: "settings.manage",
   ORG_VIEW: "org.view",
   REPORTS_VIEW: "reports.view",
-  COMPLIANCE_MANAGE: "compliance.manage",
 };
 
+// Both office roles see the whole company. The Managing Director outranks HR so
+// only the MD can appoint or edit an HR account.
 const COMPANY_SCOPE = [
   CAPABILITIES.PEOPLE_MANAGE,
   CAPABILITIES.PEOPLE_VIEW,
@@ -41,34 +49,6 @@ const COMPANY_SCOPE = [
   CAPABILITIES.SETTINGS_MANAGE,
   CAPABILITIES.ORG_VIEW,
   CAPABILITIES.REPORTS_VIEW,
-  CAPABILITIES.COMPLIANCE_MANAGE,
-];
-
-const DEPARTMENT_SCOPE = [
-  CAPABILITIES.PEOPLE_MANAGE,
-  CAPABILITIES.PEOPLE_VIEW,
-  CAPABILITIES.DEPARTMENTS_VIEW,
-  CAPABILITIES.SALARIES_MANAGE,
-  CAPABILITIES.SALARIES_VIEW,
-  CAPABILITIES.LEAVES_APPLY,
-  CAPABILITIES.LEAVES_APPROVE,
-  CAPABILITIES.LEAVES_VIEW,
-  CAPABILITIES.ATTENDANCE_SELF,
-  CAPABILITIES.ATTENDANCE_VIEW,
-  CAPABILITIES.ATTENDANCE_MANAGE,
-  CAPABILITIES.ORG_VIEW,
-  CAPABILITIES.REPORTS_VIEW,
-];
-
-const TEAM_SCOPE = [
-  CAPABILITIES.PEOPLE_VIEW,
-  CAPABILITIES.DEPARTMENTS_VIEW,
-  CAPABILITIES.LEAVES_APPLY,
-  CAPABILITIES.LEAVES_APPROVE,
-  CAPABILITIES.LEAVES_VIEW,
-  CAPABILITIES.ATTENDANCE_SELF,
-  CAPABILITIES.ATTENDANCE_VIEW,
-  CAPABILITIES.ORG_VIEW,
 ];
 
 export const ROLES = {
@@ -79,84 +59,29 @@ export const ROLES = {
     tier: "Executive",
     scope: "company",
     description:
-      "Owns the company: every department, salary record, policy and report.",
-    capabilities: COMPANY_SCOPE.filter(
-      (capability) => capability !== CAPABILITIES.LEAVES_APPLY
-    ),
-  },
-
-  general_manager: {
-    key: "general_manager",
-    label: "General Manager",
-    level: 95,
-    tier: "Executive",
-    scope: "company",
-    description:
-      "Runs day-to-day company operations across all departments and reports to the Managing Director.",
+      "Owns the company: every department, salary record, policy and report. The only role that can appoint HR.",
     capabilities: COMPANY_SCOPE,
   },
 
-  operations_manager: {
-    key: "operations_manager",
-    label: "Operations Manager",
+  hr: {
+    key: "hr",
+    label: "HR",
     level: 90,
     tier: "Management",
     scope: "company",
     description:
-      "Coordinates department managers and oversees delivery across engineering, ICT, medical, finance and business development.",
+      "Runs people operations: hiring, employee profiles, payroll, leave approvals and attendance across every department.",
     capabilities: COMPANY_SCOPE,
   },
 
-  qshe_officer: {
-    key: "qshe_officer",
-    label: "QSHE Officer",
-    level: 85,
-    tier: "Management",
-    scope: "company",
-    description:
-      "Independent quality, safety, health and environment oversight reporting to the General Manager.",
-    capabilities: [
-      CAPABILITIES.PEOPLE_VIEW,
-      CAPABILITIES.DEPARTMENTS_VIEW,
-      CAPABILITIES.LEAVES_VIEW,
-      CAPABILITIES.ATTENDANCE_SELF,
-      CAPABILITIES.ATTENDANCE_VIEW,
-      CAPABILITIES.ORG_VIEW,
-      CAPABILITIES.REPORTS_VIEW,
-      CAPABILITIES.COMPLIANCE_MANAGE,
-    ],
-  },
-
-  department_manager: {
-    key: "department_manager",
-    label: "Department Manager",
-    level: 80,
-    tier: "Management",
-    scope: "department",
-    description:
-      "Leads one department or project unit, its team leads and its employees, and reports to the Operations Manager.",
-    capabilities: DEPARTMENT_SCOPE,
-  },
-
-  team_lead: {
-    key: "team_lead",
-    label: "Team Lead",
-    level: 60,
-    tier: "Leadership",
-    scope: "department",
-    description:
-      "Supervises a team inside a department, approves their leave and reviews their attendance.",
-    capabilities: TEAM_SCOPE,
-  },
-
-  employee: {
-    key: "employee",
-    label: "Employee",
+  worker: {
+    key: "worker",
+    label: "Worker",
     level: 10,
     tier: "Staff",
     scope: "self",
     description:
-      "Team member: clocks in and out, applies for leave and views their own profile and salary.",
+      "Team member: clocks in and out, applies for leave and sees their own profile, salary and the organisation chart.",
     capabilities: [
       CAPABILITIES.LEAVES_APPLY,
       CAPABILITIES.ATTENDANCE_SELF,
@@ -165,14 +90,21 @@ export const ROLES = {
   },
 };
 
-// Accounts created before the organisation structure was adopted still carry
-// the generic role keys. Treat them as their closest new equivalent instead of
-// locking those users out.
+// Accounts created before the three-role model still carry the old keys. Map
+// them instead of locking those users out. Retired management roles become HR
+// because they carried people-management duties; the team-level roles become
+// workers.
 export const LEGACY_ROLE_ALIASES = {
   admin: "managing_director",
-  manager: "department_manager",
-  hr: "department_manager",
-  tl: "team_lead",
+  manager: "hr",
+  hr_manager: "hr",
+  general_manager: "hr",
+  operations_manager: "hr",
+  department_manager: "hr",
+  qshe_officer: "worker",
+  team_lead: "worker",
+  tl: "worker",
+  employee: "worker",
 };
 
 export const ROLE_KEYS = Object.keys(ROLES);
@@ -217,7 +149,9 @@ export const isValidRole = (role) => resolveRole(role) !== null;
 export const hasCapability = (role, capability) =>
   Boolean(getRole(role)?.capabilities.includes(capability));
 
-export const isManagementRole = (role) => roleLevel(role) >= ROLES.team_lead.level;
+// HR and above run the management console; workers get the self-service portal.
+export const isManagementRole = (role) =>
+  roleLevel(role) >= ROLES.hr.level;
 
 export const isExecutiveRole = (role) => getRole(role)?.tier === "Executive";
 
@@ -256,12 +190,27 @@ export const assignableRoles = (actorRole) => {
   );
 };
 
-// Department and team leads only act inside their own department. Company-level
-// roles (MD, GM, Operations, QSHE) see every department.
+// Kept for callers that still ask; no current role is department-scoped.
 export const isDepartmentScoped = (role) =>
   ["department", "team"].includes(getRole(role)?.scope);
 
 export const roleLabel = (role) => getRole(role)?.label || role || "";
+
+// Stored role values that mean the same thing. Filtering the directory by "HR"
+// must also match accounts still saved as department_manager or manager.
+export const roleFilterAliases = (role) => {
+  const resolved = resolveRole(role);
+
+  if (!resolved) {
+    return [];
+  }
+
+  const aliases = Object.entries(LEGACY_ROLE_ALIASES)
+    .filter(([, target]) => target === resolved)
+    .map(([legacyKey]) => legacyKey);
+
+  return [...new Set([role, resolved, ...aliases])];
+};
 
 // Client-safe copy of the catalogue (used by /api/org/structure).
 export const publicRoleCatalog = () =>

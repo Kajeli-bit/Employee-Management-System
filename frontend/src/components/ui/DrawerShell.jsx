@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 
 /**
@@ -8,7 +9,7 @@ import { FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
  *   sliding drawer over a dimmed backdrop. Navigation closes it automatically.
  * - Desktop (>= 1024px): children render in the standard fixed rail.
  */
-const DrawerShell = ({ children, onLogout, user, roleFooter }) => {
+const DrawerShell = ({ children, onLogout, user, roleFooter, accountHref }) => {
   const [open, setOpen] = useState(false);
 
   // Close the drawer when any link or button inside it is used (covers nav
@@ -83,14 +84,28 @@ const DrawerShell = ({ children, onLogout, user, roleFooter }) => {
         {/* Mobile-only footer: account summary + sign out */}
         {onLogout && (
           <div className="mt-auto flex items-center justify-between gap-3 border-t border-brand-950/10 bg-white px-4 py-3 lg:hidden">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-brand-950">
-                {user?.name || "Signed in"}
-              </p>
-              {roleFooter && (
-                <p className="truncate text-[11px] text-brand-950/55">{roleFooter}</p>
-              )}
-            </div>
+            {accountHref ? (
+              <Link
+                to={accountHref}
+                className="min-w-0 flex-1 rounded-lg px-1 py-1 transition hover:bg-brand-100"
+              >
+                <p className="truncate text-sm font-semibold text-brand-950">
+                  {user?.name || "Signed in"}
+                </p>
+                {roleFooter && (
+                  <p className="truncate text-[11px] text-brand-950/55">{roleFooter}</p>
+                )}
+              </Link>
+            ) : (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-brand-950">
+                  {user?.name || "Signed in"}
+                </p>
+                {roleFooter && (
+                  <p className="truncate text-[11px] text-brand-950/55">{roleFooter}</p>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {

@@ -65,15 +65,16 @@ const employeeSchema = new Schema(
       trim: true,
     },
 
+    // Optional at onboarding: payroll can place the worker later.
     department: {
       type: Schema.Types.ObjectId,
       ref: "Department",
-      required: true,
+      default: null,
     },
 
+    // Optional at onboarding; set when payroll is agreed.
     salary: {
       type: Number,
-      required: true,
     },
 
     // --- Employment record ------------------------------------------------
@@ -103,6 +104,20 @@ const employeeSchema = new Schema(
       type: String,
       enum: WORK_MODES,
       default: "Office",
+    },
+
+    // The site this person normally reports to. Informational for reporting:
+    // GPS attendance still accepts any active Nilric location, so someone
+    // covering another branch is not locked out.
+    workLocation: {
+      type: Schema.Types.ObjectId,
+      ref: "WorkLocation",
+      default: null,
+    },
+
+    // Probation is the usual reason an employee is not yet "Active".
+    probationEndDate: {
+      type: Date,
     },
 
     // --- Contact ----------------------------------------------------------
@@ -148,6 +163,12 @@ const employeeSchema = new Schema(
       trim: true,
     },
 
+    // NHIF / SHA health insurance membership number.
+    nhifNumber: {
+      type: String,
+      trim: true,
+    },
+
     bankName: {
       type: String,
       trim: true,
@@ -161,6 +182,28 @@ const employeeSchema = new Schema(
     bankAccountNumber: {
       type: String,
       trim: true,
+    },
+
+    bankBranch: {
+      type: String,
+      trim: true,
+    },
+
+    // --- Identification documents -----------------------------------------
+    // Field engineers and drivers are asked for a licence; expatriate staff for
+    // a passport and work permit.
+    drivingLicenceNumber: {
+      type: String,
+      trim: true,
+    },
+
+    passportNumber: {
+      type: String,
+      trim: true,
+    },
+
+    workPermitExpiry: {
+      type: Date,
     },
 
     // --- Emergency contact -------------------------------------------------

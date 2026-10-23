@@ -280,7 +280,7 @@ const View = () => {
               </div>
             )}
 
-            <h1 className="mt-4 text-3xl font-semibold leading-[1.1] tracking-tight">
+            <h1 className="mt-4 font-display text-4xl font-medium leading-[1.1] tracking-tight">
               {person?.name || "Unnamed employee"}
             </h1>
 
@@ -322,7 +322,9 @@ const View = () => {
           <div className="border-t border-white/10 px-6 py-5">
             <p className="text-xs font-medium text-brand-300">Monthly salary</p>
             <p className="mt-1 font-mono text-xl font-semibold tabular-nums tracking-tight">
-              {formatCurrency(employee.salary)}
+              {employee.salary === undefined || employee.salary === null
+                ? "Not set"
+                : formatCurrency(employee.salary)}
             </p>
 
             {person?.email && (

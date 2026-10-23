@@ -42,11 +42,20 @@ export const buildRecordGroups = (employee, person) => {
           mono: true,
         },
         {
+          label: "Probation ends",
+          value: dateOrEmpty(employee.probationEndDate),
+          mono: true,
+        },
+        {
           label: "Contract ends",
           value: dateOrEmpty(employee.contractEndDate),
           mono: true,
         },
         { label: "Attendance mode", value: employee.workMode },
+        {
+          label: "Home site",
+          value: employee.workLocation?.name || "",
+        },
       ],
     },
     {
@@ -86,7 +95,9 @@ export const buildRecordGroups = (employee, person) => {
         { label: "National ID (NIN)", value: employee.nationalId, mono: true },
         { label: "TIN", value: employee.tin, mono: true },
         { label: "NSSF number", value: employee.nssfNumber, mono: true },
+        { label: "NHIF / SHA number", value: employee.nhifNumber, mono: true },
         { label: "Bank", value: employee.bankName },
+        { label: "Bank branch", value: employee.bankBranch },
         { label: "Account name", value: employee.bankAccountName },
         {
           label: "Account number",
@@ -99,6 +110,22 @@ export const buildRecordGroups = (employee, person) => {
             employee.salary === undefined || employee.salary === null
               ? ""
               : formatCurrency(employee.salary),
+          mono: true,
+        },
+      ],
+    },
+    {
+      title: "Identification documents",
+      fields: [
+        {
+          label: "Driving licence",
+          value: employee.drivingLicenceNumber,
+          mono: true,
+        },
+        { label: "Passport number", value: employee.passportNumber, mono: true },
+        {
+          label: "Work permit expiry",
+          value: dateOrEmpty(employee.workPermitExpiry),
           mono: true,
         },
       ],

@@ -65,7 +65,7 @@ const Salary = () => {
     <div className="p-6 bg-gray-100 min-h-screen">
       <div className="max-w-5xl mx-auto">
 
-        <h2 className="text-3xl font-bold text-brand-700 mb-6">
+        <h2 className="font-display text-4xl font-medium tracking-tight text-brand-950 mb-6">
           My Salary Details
         </h2>
 

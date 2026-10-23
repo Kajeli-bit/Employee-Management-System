@@ -199,7 +199,7 @@ const Setting = () => {
     <div className="min-h-full bg-gray-50 p-5">
       <div className="max-w-md mx-auto">
         <div className="mb-5">
-          <h1 className="text-3xl font-bold text-black">
+          <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
             Login Settings
           </h1>
 

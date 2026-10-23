@@ -13,8 +13,9 @@ export const getDashboard = async (req, res) => {
   try {
     const companyId = req.user.companyId;
 
-    // One population, shared with the employee directory, attendance, salary
-    // and leave pages. Nothing here recomputes scope of its own.
+    // The dashboard shows the same population the signed-in user's pages use:
+    // the whole company for the Managing Director and HR, their own record for
+    // a worker.
     const employeeFilter = await accessibleEmployeeFilter(req.user);
 
     if (!employeeFilter) {

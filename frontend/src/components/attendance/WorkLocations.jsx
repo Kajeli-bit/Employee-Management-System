@@ -541,7 +541,7 @@ const WorkLocations = () => {
         >
           <FaMapMarkerAlt />
         </span>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
           Work locations
         </h1>
       </header>

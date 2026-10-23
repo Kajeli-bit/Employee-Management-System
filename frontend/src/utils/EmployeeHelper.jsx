@@ -93,7 +93,7 @@ export const columns = [
     ),
     sortable: true,
     grow: 0,
-    // Widest badge ("Department Manager") is about 134px plus cell padding.
+    // Widest badge ("Managing Director") is about 134px plus cell padding.
     minWidth: "180px",
     left: true,
     style: {

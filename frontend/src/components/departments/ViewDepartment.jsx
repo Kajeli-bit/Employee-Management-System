@@ -93,7 +93,7 @@ const ViewDepartment = () => {
               <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">
                 Department
               </p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+              <h2 className="mt-1 font-display text-3xl font-medium tracking-tight text-brand-950">
                 {department.dep_name}
               </h2>
             </div>

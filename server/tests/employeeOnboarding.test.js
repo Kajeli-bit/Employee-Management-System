@@ -1,0 +1,193 @@
+import test, { after, before, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  clearTestDb,
+  connectTestDb,
+  createReq,
+  createRes,
+  disconnectTestDb,
+} from "./helpers/harness.js";
+import { makeStaff, seedOrganisation } from "./helpers/fixtures.js";
+import { addEmployee } from "../controllers/employeeController.js";
+import User from "../models/User.js";
+import Employee from "../models/Employee.js";
+
+// Only Clerk is doubled. The controller, Mongoose models and a real in-memory
+// database all run as they do in production.
+const makeClerk = () => {
+  const state = { created: null };
+
+  return {
+    state,
+    users: {
+      getUserList: async () => ({ data: [] }),
+      createUser: async (params) => {
+        state.created = params;
+
+        return { id: `clerk_test_${params.emailAddress[0].split("@")[0]}` };
+      },
+      deleteUser: async () => ({}),
+    },
+  };
+};
+
+before(connectTestDb);
+after(disconnectTestDb);
+
+beforeEach(clearTestDb);
+
+const add = async ({ actor, body, clerk }) => {
+  const res = createRes();
+
+  await addEmployee(createReq({ user: actor, body }), res, { clerk });
+
+  return res;
+};
+
+const hrActor = async (companyId, departmentId, headId) => {
+  const hr = await makeStaff({
+    companyId,
+    department: departmentId,
+    createdBy: headId,
+    role: "hr",
+    name: "HR Manager",
+    employeeId: "EMP-HR-1",
+  });
+
+  return hr.user;
+};
+
+test("name, work email and phone are enough to add a worker", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Amina Juma",
+      email: "Amina.Juma@Nilric.co.tz",
+      phone: "+255 712 345 678",
+    },
+  });
+
+  assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+  assert.equal(res.body.role, "worker");
+  assert.equal(res.body.employeeEmail, "amina.juma@nilric.co.tz");
+  assert.ok(clerk.state.created, "a Clerk login is still created");
+
+  const user = await User.findOne({ email: "amina.juma@nilric.co.tz" });
+
+  assert.ok(user);
+  assert.equal(user.name, "Amina Juma");
+  assert.equal(user.role, "worker");
+  assert.equal(user.username, "amina.juma", "username comes from the email");
+  assert.equal(user.designation, "");
+  assert.equal(user.dob, undefined);
+
+  const employee = await Employee.findOne({ userId: user._id });
+
+  assert.ok(employee);
+  assert.equal(employee.phone, "+255 712 345 678");
+  assert.equal(employee.department, null, "placement is optional");
+  assert.equal(employee.salary, undefined, "pay can be agreed later");
+  assert.match(employee.employeeId, /^NIL-\d{2}-\d{4}$/);
+  assert.equal(res.body.employeeId, employee.employeeId);
+});
+
+test("a generated username does not collide with an existing one", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  await User.create({
+    name: "Amina Juma",
+    username: "amina.juma",
+    email: "someone.else@nilric.co.tz",
+    companyId: company._id,
+    role: "worker",
+  });
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Amina Juma",
+      email: "amina.juma@nilric.co.tz",
+      phone: "0712345678",
+    },
+  });
+
+  assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+
+  const user = await User.findOne({ email: "amina.juma@nilric.co.tz" });
+
+  assert.equal(user.username, "amina.juma2");
+});
+
+test("a username and staff ID typed by HR are kept", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Amina Juma",
+      email: "amina@nilric.co.tz",
+      phone: "0712345678",
+      username: "amina.j",
+      employeeId: "NIL-26-7777",
+    },
+  });
+
+  assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+
+  const user = await User.findOne({ email: "amina@nilric.co.tz" });
+  const employee = await Employee.findOne({ userId: user._id });
+
+  assert.equal(user.username, "amina.j");
+  assert.equal(employee.employeeId, "NIL-26-7777");
+});
+
+test("the phone number is required and nothing is saved without it", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  const res = await add({
+    actor,
+    clerk,
+    body: { name: "Amina Juma", email: "amina@nilric.co.tz" },
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.error, /phone/);
+  assert.equal(await User.countDocuments({ email: "amina@nilric.co.tz" }), 0);
+  assert.equal(await Employee.countDocuments({}), 1, "only the HR record exists");
+  assert.equal(clerk.state.created, null);
+});
+
+test("HR cannot appoint another HR account", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Second HR",
+      email: "second.hr@nilric.co.tz",
+      phone: "0712345678",
+      role: "hr",
+    },
+  });
+
+  assert.equal(res.statusCode, 403);
+  assert.match(res.body.error, /below your role/i);
+  assert.equal(clerk.state.created, null);
+});

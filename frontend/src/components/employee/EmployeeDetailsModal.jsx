@@ -184,7 +184,7 @@ const EmployeeDetailsModal = ({
             )}
 
             <div className="min-w-0 flex-1">
-              <h2 className="truncate text-xl font-semibold leading-tight tracking-tight">
+              <h2 className="truncate font-display text-2xl font-medium leading-tight tracking-tight">
                 {person?.name || "Unnamed employee"}
               </h2>
               {/* Designation, staff ID and the status tags share one line. */}
