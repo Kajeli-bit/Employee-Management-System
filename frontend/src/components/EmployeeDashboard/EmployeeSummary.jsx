@@ -248,9 +248,11 @@ const EmployeeSummary = () => {
 
   return (
     <div
-      className={`mx-auto max-w-5xl ${
-        workspace.inAdmin ? "px-4 pb-12 pt-10 sm:px-6" : ""
-      }`}
+      className={
+        workspace.inAdmin
+          ? "mx-auto max-w-5xl px-4 pb-12 pt-10 sm:px-6"
+          : "w-full px-4 pb-10 pt-8 sm:px-6 lg:px-8"
+      }
     >
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">

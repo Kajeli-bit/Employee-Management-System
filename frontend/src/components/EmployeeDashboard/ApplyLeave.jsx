@@ -4,6 +4,7 @@ import axios from "axios";
 import { FaCheck } from "react-icons/fa";
 
 import { useAuth } from "../../context/useAuth";
+import { useWorkspace } from "../../utils/workspace";
 import API_URL from "../../api";
 import { CAPABILITIES, hasCapability } from "../../utils/roles";
 
@@ -43,6 +44,7 @@ const daysBetween = (from, to) => {
 // from the leave list. The dialog passes `bare`, `onCancel` and `onSuccess`.
 const ApplyLeave = ({ bare = false, onCancel, onSuccess }) => {
   const { user, getToken } = useAuth();
+  const { inAdmin } = useWorkspace();
 
   const [leave, setLeave] = useState(emptyForm);
   const [errors, setErrors] = useState({});
@@ -336,7 +338,13 @@ const ApplyLeave = ({ bare = false, onCancel, onSuccess }) => {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-12 pt-10 sm:px-6">
+    <div
+      className={
+        inAdmin
+          ? "mx-auto max-w-2xl px-4 pb-12 pt-10 sm:px-6"
+          : "w-full px-4 pb-12 pt-8 sm:px-6 lg:px-8"
+      }
+    >
       <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
         Apply for leave
       </h1>

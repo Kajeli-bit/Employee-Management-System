@@ -198,9 +198,15 @@ const EditLeave = () => {
 
   return (
     <div
-      className={`p-5 ${workspace.inAdmin ? "" : "min-h-full bg-gray-50"}`}
+      className={
+        workspace.inAdmin
+          ? "p-5"
+          : "min-h-full w-full bg-gray-50 p-4 sm:p-6 lg:p-8"
+      }
     >
-      <div className="max-w-2xl mx-auto">
+      <div
+        className={workspace.inAdmin ? "mx-auto max-w-2xl" : "w-full max-w-4xl"}
+      >
         <div className="mb-5">
           <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
             Edit Leave Request

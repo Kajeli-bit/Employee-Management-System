@@ -6,10 +6,12 @@ import {
 } from "@clerk/react";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
+import { useWorkspace } from "../../utils/workspace";
 
 const Setting = () => {
   const { user } = useUser();
   const { getToken } = useAuth();
+  const { inAdmin } = useWorkspace();
 
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -196,8 +198,14 @@ const Setting = () => {
   };
 
   return (
-    <div className="min-h-full bg-gray-50 p-5">
-      <div className="max-w-md mx-auto">
+    <div
+      className={
+        inAdmin
+          ? "min-h-full bg-gray-50 p-5"
+          : "min-h-full w-full bg-gray-50 p-4 sm:p-6 lg:p-8"
+      }
+    >
+      <div className={inAdmin ? "mx-auto max-w-md" : "w-full max-w-2xl"}>
         <div className="mb-5">
           <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950">
             Login Settings

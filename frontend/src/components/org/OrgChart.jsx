@@ -5,6 +5,7 @@ import { FaBuilding, FaSitemap, FaUsers } from "react-icons/fa";
 import { useAuth } from "../../context/useAuth";
 import { Monogram } from "../../utils/DepartmentMonogram";
 import API_URL from "../../api";
+import { useWorkspace } from "../../utils/workspace";
 import Loader from "../common/Loader";
 import {
   NILRIC_ORG,
@@ -97,6 +98,7 @@ const DepartmentCard = ({ department, tree }) => {
 
 const OrgChart = () => {
   const { getToken } = useAuth();
+  const { inAdmin } = useWorkspace();
 
   const [structure, setStructure] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -143,7 +145,13 @@ const OrgChart = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
+    <div
+      className={
+        inAdmin
+          ? "mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6"
+          : "w-full px-4 pb-10 pt-8 sm:px-6 lg:px-8"
+      }
+    >
       <h1 className="flex items-center gap-3 font-display text-4xl font-medium tracking-tight text-brand-950">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-700 text-xl text-white shadow-sm">
           <FaSitemap aria-hidden="true" />

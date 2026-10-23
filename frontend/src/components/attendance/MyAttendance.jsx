@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 
 import { useAuth } from "../../context/useAuth";
+import { useWorkspace } from "../../utils/workspace";
 import API_URL from "../../api";
 import Loader from "../common/Loader";
 import {
@@ -147,6 +148,7 @@ const DayStrip = ({ records }) => {
 
 const MyAttendance = () => {
   const { getToken } = useAuth();
+  const { inAdmin: inAdminWorkspace } = useWorkspace();
 
   const [today, setToday] = useState(null);
   const [history, setHistory] = useState({
@@ -382,7 +384,13 @@ const MyAttendance = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6">
+    <div
+      className={
+        inAdminWorkspace
+          ? "mx-auto max-w-6xl px-4 pb-10 pt-10 sm:px-6"
+          : "w-full px-4 pb-10 pt-8 sm:px-6 lg:px-8"
+      }
+    >
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-3 font-display text-4xl font-medium tracking-tight text-brand-950">
