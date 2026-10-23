@@ -510,6 +510,92 @@ test("the scheduled entry point refuses to run without its secret", async () => 
   }
 });
 
+test("a whole forgotten day closes at 17:00, not when the sweep happens to run", async () => {
+  const { company, finance, head } = await seedOrganisation({ policy: POLICY });
+  const { employee } = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+  });
+
+  // On site all afternoon, last report two minutes before the presence check.
+  const lastOnSite = new Date("2026-10-23T13:47:00.000Z"); // 16:47 local
+
+  await startDay(employee, {
+    lastSeen: seen({ at: lastOnSite }),
+    lastSeenInsideAt: lastOnSite,
+  });
+
+  // 15:35 — the early check sees an old on-site reading and does nothing.
+  await sweepCompanyDay({
+    companyId: company._id,
+    now: new Date("2026-10-23T12:35:00.000Z"),
+  });
+
+  assert.equal((await storedRecord(employee)).checkOut, null);
+
+  // 16:47 — the presence check queues the close.
+  await sweepCompanyDay({ companyId: company._id, now: lastOnSite });
+
+  const queued = await storedRecord(employee);
+
+  assert.equal(queued.checkOut, null);
+  assert.equal(queued.autoClockOut.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
+
+  // 16:59 — still open, the employee could still clock out themselves.
+  await sweepCompanyDay({
+    companyId: company._id,
+    now: new Date("2026-10-23T13:59:00.000Z"),
+  });
+
+  assert.equal((await storedRecord(employee)).checkOut, null);
+
+  // 17:00:30 — a sweep a fraction late still records 17:00.
+  await sweepCompanyDay({
+    companyId: company._id,
+    now: new Date("2026-10-23T14:00:30.000Z"),
+  });
+
+  const stored = await storedRecord(employee);
+
+  assert.equal(stored.checkOut.automatic, true);
+  assert.equal(stored.checkOut.at.toISOString(), "2026-10-23T14:00:00.000Z");
+  assert.equal(stored.workedMinutes, 540);
+  assert.match(stored.checkOut.reason, /on site/i);
+});
+
+test("a heartbeat after the automatic close is ignored", async () => {
+  const { company, finance, head } = await seedOrganisation({ policy: POLICY });
+  const { user, employee } = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+  });
+
+  await startDay(employee, {
+    lastSeen: seen({ at: AT_1535, withinGeofence: false }),
+    lastSeenInsideAt: AT_1530,
+  });
+
+  await sweepCompanyDay({ companyId: company._id, now: AT_1600 });
+
+  const closed = await storedRecord(employee);
+
+  const res = await call(recordHeartbeat, {
+    user,
+    body: { ...HEAD_OFFICE, accuracy: 10 },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.tracked, false);
+  assert.equal(res.body.reason, "no-open-day");
+
+  const after = await storedRecord(employee);
+
+  assert.equal(after.checkOut.at.toISOString(), closed.checkOut.at.toISOString());
+  assert.equal(after.lastSeen.at.toISOString(), AT_1535.toISOString());
+});
+
 test("the sweep only touches today's open days", async () => {
   const { company, finance, head } = await seedOrganisation({ policy: POLICY });
   const { employee } = await makeStaff({

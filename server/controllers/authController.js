@@ -9,6 +9,7 @@ import Department from "../models/Department.js";
 import Employee from "../models/Employee.js";
 import { ROLES } from "../utils/roles.js";
 import { seedCompanyDefaults } from "../utils/orgDefaults.js";
+import { nudgeSweeps } from "./attendanceAutomationController.js";
 
 
 // Public: tells the sign-in page whether the database still needs its first
@@ -387,11 +388,17 @@ const login = async (req, res) => {
 
 
 
-const verify = (req, res) => {
-  return res.status(200).json({
+const verify = async (req, res) => {
+  res.status(200).json({
     success: true,
     user: req.user,
   });
+
+  // Every signed-in page load also moves the automatic clock-out checks along.
+  // That keeps a 17:00 close happening even when no employee app is open at the
+  // end of the day and no external scheduler is configured; the work itself is
+  // time-based and idempotent, and at most one sweep runs per minute.
+  await nudgeSweeps(req.user.companyId);
 };
 
 
