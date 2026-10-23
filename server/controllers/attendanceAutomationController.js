@@ -15,11 +15,16 @@ import { getPolicy } from "./attendanceController.js";
 
 const MAX_COMPANIES_PER_RUN = 500;
 
-// The sweep is cheap but it runs on every heartbeat, so an instance does at
-// most one per minute. The rules themselves are time-based and idempotent, so
-// running it more often only wastes queries.
+// Request paths can each nudge a sweep, but this only suppresses redundant
+// requests within one warm serverless instance. It is not the scheduler; the
+// GitHub Actions workflow is responsible for firing on the wall-clock cadence.
 const NUDGE_INTERVAL_MS = 60 * 1000;
 let lastNudgeAt = 0;
+
+// Coalesce simultaneous employee heartbeats/sign-ins within this instance. The
+// process-local timestamp alone is unsafe: an early 15:30 tick must not suppress
+// the 16:45 check for the next minute, and serverless instances do not share it.
+let nudgeInFlight = null;
 
 const isUnavailableEmployee = (employee) =>
   !employee || ["Exited", "Suspended"].includes(employee.employmentStatus);
@@ -304,19 +309,25 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
 export const nudgeSweeps = async (companyId) => {
   const now = Date.now();
 
+  if (nudgeInFlight) {
+    return nudgeInFlight;
+  }
+
   if (now - lastNudgeAt < NUDGE_INTERVAL_MS) {
     return null;
   }
 
   lastNudgeAt = now;
+  nudgeInFlight = sweepCompanyDay({ companyId, now: new Date() })
+    .catch((error) => {
+      console.log("ATTENDANCE SWEEP ERROR:", error);
+      return null;
+    })
+    .finally(() => {
+      nudgeInFlight = null;
+    });
 
-  try {
-    return await sweepCompanyDay({ companyId, now: new Date() });
-  } catch (error) {
-    console.log("ATTENDANCE SWEEP ERROR:", error);
-
-    return null;
-  }
+  return nudgeInFlight;
 };
 
 // Lets HR or the Managing Director run the check on demand, for example when a
@@ -389,6 +400,8 @@ export const runScheduledSweep = async (req, res) => {
     const now = new Date();
     const results = [];
 
+    // Each company has its own timezone and work-end, so preserve the
+    // per-company summary rather than reporting one global schedule result.
     for (const company of companies) {
       results.push(await sweepCompanyDay({ companyId: company._id, now }));
     }
