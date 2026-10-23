@@ -67,6 +67,16 @@ export const recordHeartbeat = async (req, res) => {
     const now = new Date();
     const date = localDateKey(now, policy.timezone);
 
+    const [year, month, day] = date.split("-").map(Number);
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    if (weekday === 0) {
+      return res.status(200).json({
+        success: true,
+        tracked: false,
+        reason: "non-working-day",
+      });
+    }
+
     const open = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
@@ -99,33 +109,50 @@ export const recordHeartbeat = async (req, res) => {
       locations
     );
 
+    const lastSeen = {
+      at: now,
+      latitude,
+      longitude,
+      accuracyMeters: Math.round(
+        Number.isFinite(accuracy) && accuracy > 0 ? accuracy : 0
+      ),
+      distanceMeters: geofence.distanceMeters,
+      location: geofence.location?._id || null,
+      locationName: geofence.location?.name || "",
+      withinGeofence: geofence.withinFence,
+    };
     const update = {
-      $set: {
-        lastSeen: {
-          at: now,
-          latitude,
-          longitude,
-          accuracyMeters: Math.round(
-            Number.isFinite(accuracy) && accuracy > 0 ? accuracy : 0
-          ),
-          distanceMeters: geofence.distanceMeters,
-          location: geofence.location?._id || null,
-          locationName: geofence.location?.name || "",
-          withinGeofence: geofence.withinFence,
-        },
-      },
+      $set: { lastSeen },
     };
 
     // Keeping the last on-site reading is what makes an honest departure time
     // possible when someone walks out without clocking out.
     if (geofence.withinFence) {
       update.$set.lastSeenInsideAt = now;
+      update.$set.lastSeenInside = lastSeen;
     }
 
     await Attendance.updateOne(
       { _id: open._id, checkOut: null },
       update
     );
+
+    // A fresh on-site reading cancels an early-departure schedule. Keep this
+    // separate so the old departure's audit reason remains available.
+    if (geofence.withinFence) {
+      await Attendance.updateOne(
+        {
+          _id: open._id,
+          checkOut: null,
+          "autoClockOut.outcome": "left-premises",
+          "autoClockOut.scheduledFor": { $ne: null },
+        },
+        {
+          $unset: { "autoClockOut.scheduledFor": "" },
+          $set: { "autoClockOut.evaluatedAt": now },
+        }
+      );
+    }
 
     await nudgeSweeps(req.user.companyId);
 
@@ -170,8 +197,15 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
 
   const policy = getPolicy(company);
   const date = localDateKey(now, policy.timezone);
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 
   summary.date = date;
+
+  // Attendance sweeps are intentionally skipped on Sundays.
+  if (weekday === 0) {
+    return summary;
+  }
 
   const open = await Attendance.find({
     companyId,
@@ -213,6 +247,20 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
     });
 
     if (!decision) {
+      continue;
+    }
+
+    if (decision.action === "cancel-schedule") {
+      await Attendance.updateOne(
+        { _id: record._id, checkOut: null },
+        {
+          $unset: { "autoClockOut.scheduledFor": "" },
+          $set: {
+            "autoClockOut.evaluatedAt": now,
+            "autoClockOut.reason": decision.reason,
+          },
+        }
+      );
       continue;
     }
 
@@ -268,7 +316,10 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
       policy,
     });
 
-    const seen = record.lastSeen || {};
+    const seen =
+      decision.outcome === "left-premises"
+        ? record.lastSeenInside || record.lastSeen || {}
+        : record.lastSeen || {};
 
     const closed = await Attendance.findOneAndUpdate(
       { _id: record._id, checkOut: null },
@@ -281,7 +332,11 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
             accuracyMeters: seen.accuracyMeters ?? 0,
             distanceMeters: seen.distanceMeters ?? null,
             location: seen.location ?? null,
-            locationName: seen.locationName || "Automatic clock-out",
+            locationName:
+              seen.locationName ||
+              (decision.outcome === "left-premises"
+                ? "Last on-site location"
+                : "Automatic clock-out"),
             withinGeofence: Boolean(seen.withinGeofence),
             automatic: true,
             reason: decision.reason,

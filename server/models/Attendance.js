@@ -201,6 +201,13 @@ const attendanceSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Keep the full last on-site fix as well as its timestamp so an automatic
+    // departure audit can identify the worksite and time the device was there.
+    lastSeenInside: {
+      type: lastSeenSchema,
+      default: null,
+    },
+
     // Audit trail of the automatic clock-out checks for this day.
     autoClockOut: {
       evaluatedAt: {

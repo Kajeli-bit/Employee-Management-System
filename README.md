@@ -11,10 +11,11 @@ A full-stack employee management system for **Nilric General Traders Company Lim
 | Roles | Three roles: Managing Director, HR and Worker. The MD and HR run the management console; workers get a self-service portal. Retired chart roles (`general_manager`, `department_manager`, `team_lead`, `qshe_officer`, …) still resolve through a legacy map. |
 | Departments | Seeded with the 6 departments and 8 teams from the organisation chart, including a two-level department/team tree. |
 | Profiles | Employment, contact, statutory (NIN, TIN, NSSF), payroll, emergency contact and qualification fields, plus a reporting line. |
-| Attendance | GPS check-in/check-out against geofenced work locations, late/half-day rules, daily register, regularization and per-employee history. |
+| Attendance | GPS check-in/check-out against geofenced work locations, attendance heartbeats and last on-site audit location, weekday/Saturday schedules, late/half-day rules, daily register and regularization. |
 | Organisation chart | A live `/organisation` page for every user, with headcounts by role and department. |
 | UI | IBM Plex typography, capability-driven navigation, TZS currency, Nilric login copy and attendance-first employee dashboard. |
 | My workspace | The management console carries the signed-in manager's own dashboard, attendance and leave records under `/admin-dashboard/my`, so clocking in or applying for leave never leaves the console. |
+| Worker workspace | The self-service dashboard uses a full-width content layout; account and sign-out actions live in its sidebar on desktop and mobile. |
 
 ---
 
@@ -76,32 +77,38 @@ Attendance is recorded against a **company-local date** (`Africa/Dar_es_Salaam`,
 **Default policy** (editable on the Work locations screen by the MD or HR):
 
 ```text
-workStart       08:00
-workEnd         17:00
+workStart       08:00 (Monday–Friday)
+workEnd         17:00 (Monday–Friday)
+saturdayWorkStart 09:00
+saturdayWorkEnd   13:00
+sunday          non-working day
 graceMinutes    15
 halfDayMinutes  240
 requireGeofence true
 timezone        Africa/Dar_es_Salaam
-autoClockOut    true   (checks at 15:30 and 16:45, closes at 17:00)
+autoClockOut    true   (weekdays: 15:30 / 16:45 / 17:00; Saturday: 11:30 / 12:45 / 13:00)
 ```
 
 **Seeded head office** — `Nilric Head Office`, Plot 163/129, Apartment 107, Samora Avenue, Dar es Salaam at approximately `-6.8167, 39.2889`, radius 250 m. Replace the pin with the exact office coordinates from the Work locations screen ("Use my current location" while standing at the gate).
 
 **Regularization** — managers with `attendance.manage` can set clock-in/out times, status and a reason for any employee they manage. The record is tagged `Manual` and stores who corrected it.
 
-**Automatic clock-out** — a forgotten clock-out closes itself, driven by three checks around the end of the day (all in company time):
+**Automatic clock-out** — a forgotten clock-out is resolved at the scheduled end of the working day. The system checks the most recent GPS heartbeat and the separately stored last on-site time (all in company-local time):
 
 | Check | What it does |
 | --- | --- |
-| 15:30 — early departure | The device is away from every work location → the day closes at the last time it was seen on site. Still on site → nothing. |
-| 16:45 — presence check | The device is still on site → the day is queued to close at 17:00. No position → the day stays open for review. |
-| 17:00 — close | Queued days close at exactly 17:00 and are stamped `Auto`, with the reason stored on the record. |
+| 15:30 — early departure (weekdays) | If an office worker's latest location is outside all active sites, the system stores the latest inside-site timestamp/location as the estimated departure, but leaves attendance open until 17:00. |
+| 16:45 — presence check (weekdays) | If a recent location is available, the record is queued for 17:00. If no recent position arrived, the record stays open for review instead of guessing. |
+| 17:00 — close (weekdays) | Queued records are automatically clocked out at 17:00. Early departures retain the actual last-seen-on-site time in the automatic clock-out reason and audit trail. |
+| 11:30 — early departure (Saturday) | A location outside all active sites queues an automatic close at 13:00 while preserving the last on-site time/location. |
+| 12:45 — presence check (Saturday) | A recent location queues a close at 13:00. No recent position leaves the record open for review. |
+| 13:00 — close (Saturday) | Queued Saturday attendance is closed at 13:00. Sundays are non-working days and are skipped by the scheduled attendance sweep. |
 
-How it gets a position: while a day is open, the employee app posts its position to `POST /api/attendance/heartbeat` every five minutes. A browser can only read a location while the page is open and permission has been granted, so a closed tab or laptop lid means no reading — the system then leaves the day open rather than guessing, and the register shows the last position it had. The last on-site reading is kept separately, which is what makes an honest departure time possible ("closed at 15:30, last seen inside at 15:12").
+How it gets a position: while a day is open, the employee app posts its position to `POST /api/attendance/heartbeat` every five minutes. A browser can only read a location while the page is open and permission has been granted, so a closed tab or laptop lid means no new reading; a day without enough recent evidence is left open for review. The system preserves the latest location and separately tracks the full last fix inside a worksite. For example, a worker who leaves at 15:20 may be automatically clocked out at 17:00; the checkout record carries the last on-site GPS fix/time, and the reason states that 15:20 was the last time seen inside. If the device reports back inside the worksite before the close, the early-departure queue is canceled and the scheduled-end presence check decides whether to close the day.
 
-Field and remote staff are never closed early for being away from the office. They are only closed at 17:00, and only after their device reported during the presence check.
+Field and remote staff are never closed early for being away from the office. With recent location evidence, their open attendance is closed at the scheduled end: 17:00 on weekdays or 13:00 Saturday. Sundays are non-working days.
 
-The times derive from `workEnd`, so a company finishing at 18:00 checks at 16:30, 17:45 and 18:00. Attendance policy fields: `autoClockOut` (switch), `earlyDepartureCheckMinutes` (default 90) and `autoClockOutConfirmMinutes` (default 15).
+The weekday times derive from `workEnd`, so a company finishing at 18:00 checks at 16:30, 17:45 and 18:00. Saturday defaults are `saturdayWorkStart` 09:00 and `saturdayWorkEnd` 13:00; attendance policy fields `earlyDepartureCheckMinutes` (default 90) and `autoClockOutConfirmMinutes` (default 15) apply relative to that day's end as well. MD or HR can edit the Saturday hours on Work locations → Attendance policy. Sunday clock-in is rejected and automatic sweeps do not process Sunday records.
 
 **Scheduling** — every heartbeat also runs the check for that company, so an open employee app keeps the schedule moving. For days when nobody has the app open, the same check runs from a scheduler: set `CRON_SECRET` on the server, then either let the included GitHub Actions workflow call `GET /api/cron/attendance` every ten minutes (set the `ATTENDANCE_SWEEP_URL` repository variable to `https://<your-domain>/api/cron/attendance` and `ATTENDANCE_CRON_SECRET` to the same secret), or point any cron service at that URL with the same header. Vercel's own cron jobs are limited to once a day on the Hobby plan, which is why the schedule is not in `vercel.json`.
 
@@ -118,6 +125,13 @@ Everything else lives on the profile, which HR fills in from **Employees → ope
 - **Every role is listed in the editor.** The picker is grouped by tier (Executive, Management, Staff) and rendered from the server catalogue, so changing a role never requires a frontend release. Roles at or above the signed-in user's level are shown but locked with the reason: only lower levels can be created, which the server enforces independently. The MD sees all three roles; HR can change a worker's role but cannot appoint another HR account.
 - **Access preview.** Selecting a role shows its description, level, scope and the capabilities it grants (payroll, leave approval, attendance review) before the change is saved.
 - **Suggestions, not guesses.** The employee ID has a generator (`NIL-YY-NNNN`), the supervisor defaults to the most senior person in the chosen department, and designation suggestions are filtered to that department's titles.
+
+## Recent workspace and attendance updates
+
+- The worker portal uses the available page width, with account settings and sign-out in its sidebar on desktop and mobile; the management-console layout is unchanged.
+- Attendance heartbeats preserve the latest position and full last on-site GPS fix. An office employee who leaves early remains clocked in until 17:00 on weekdays or 13:00 on Saturday; the recorded checkout carries the last on-site time/location for audit.
+- Standard hours are 08:00–17:00 Monday–Friday and 09:00–13:00 Saturday. Sunday is a non-working day: check-ins are rejected and automatic sweeps are skipped.
+- See [GPS attendance](#gps-attendance) for early-departure confirmation, automatic close, and scheduler behavior.
 
 ## Employee profile fields
 
@@ -289,12 +303,12 @@ frontend/src/
 ## Checks
 
 ```bash
-cd server && npm test               # 32 tests: 14 unit, 18 database-backed
+cd server && npm test               # Node test suite, including database-backed automation cases
 cd frontend && npm run build        # production build (needs VITE_CLERK_PUBLISHABLE_KEY)
 cd frontend && npm run lint         # currently reports pre-existing lint errors
 ```
 
-The repo had no test suite before. `npm test` runs Node's built-in test runner:
+`npm test` runs Node's built-in test runner:
 
 - `tests/geo.test.js`, `tests/roles.test.js` — pure functions: haversine and fence tolerance, the Dar es Salaam calendar, the three-role hierarchy, role capabilities, the legacy role map and which roles may assign which.
 - `tests/employeeProfile.test.js` — profile-field whitelist (payroll numbers submitted as profile data are ignored), list and emergency-contact parsing, boolean handling, the visibility rule, and that the public role catalogue carries the tier, scope and description the picker needs.

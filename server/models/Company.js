@@ -35,6 +35,16 @@ const companySchema = new mongoose.Schema(
         default: "17:00",
       },
 
+      saturdayWorkStart: {
+        type: String,
+        default: "09:00",
+      },
+
+      saturdayWorkEnd: {
+        type: String,
+        default: "13:00",
+      },
+
       graceMinutes: {
         type: Number,
         default: 15,
@@ -54,7 +64,7 @@ const companySchema = new mongoose.Schema(
 
       weekendDays: {
         type: [Number],
-        default: [0, 6],
+        default: [0],
       },
 
       // Close the day for anyone who forgot to clock out.
@@ -63,16 +73,18 @@ const companySchema = new mongoose.Schema(
         default: true,
       },
 
-      // Minutes before workEnd when the device is checked for an early exit.
-      // 90 minutes puts the first check at 15:30 for a 17:00 finish.
+      // Minutes before the scheduled weekday/Saturday end when the device is
+      // checked for an early exit. Defaults put checks at 15:30 Friday and
+      // 11:30 Saturday.
       earlyDepartureCheckMinutes: {
         type: Number,
         default: 90,
         min: 0,
       },
 
-      // Minutes before workEnd when the device must still be on site for the
-      // automatic clock-out at workEnd. 15 minutes puts it at 16:45.
+      // Minutes before the scheduled end when a recent position is required
+      // for automatic clock-out. Defaults put it at 16:45 weekdays and 12:45
+      // Saturday.
       autoClockOutConfirmMinutes: {
         type: Number,
         default: 15,

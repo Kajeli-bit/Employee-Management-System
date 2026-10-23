@@ -253,6 +253,24 @@ const Login = () => {
                     // Accounts are created by HR/MD, so the sign-up prompt,
                     // the Clerk badge and the dev-mode badge are hidden.
                     footer: { display: "none" },
+                    socialButtonsBlockButton: {
+                      height: "calc(var(--clerk-social-button-height, 52px) + 15px)",
+                      minHeight:
+                        "calc(var(--clerk-social-button-height, 52px) + 15px)",
+                      padding: "0 1.25rem",
+                      border: "1px solid #e4d9ef",
+                      borderRadius: "0.9rem",
+                      backgroundColor: "#fbf9fd",
+                      boxShadow: "0 3px 10px rgba(74, 38, 106, 0.06)",
+                      transition:
+                        "background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease",
+                    },
+                    socialButtonsBlockButtonText: {
+                      fontSize: "1rem",
+                      fontWeight: 600,
+                      letterSpacing: "0.01em",
+                    },
+                    socialButtonsBlockButtonArrow: { display: "none" },
                   },
                 }}
               />

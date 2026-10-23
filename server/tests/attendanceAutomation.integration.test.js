@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import Attendance from "../models/Attendance.js";
 import {
   runScheduledSweep,
+  sweepCompanyDay,
 } from "../controllers/attendanceAutomationController.js";
 import {
   connectTestDb,
@@ -148,6 +149,80 @@ test("scheduled run evaluates each company's own working-day boundary", async ()
   // The later company's confirmation check is 17:45, not 16:45, so this same
   // UTC instant must not prematurely schedule its clock-out.
   assert.equal(laterRecord.autoClockOut?.scheduledFor || null, null);
+});
+
+test("Saturday scheduled sweep queues a 13:00 auto close", async () => {
+  const company = await seedOrganisation({
+    name: "Saturday schedule company",
+    policy: {
+      saturdayWorkStart: "09:00",
+      saturdayWorkEnd: "13:00",
+    },
+  });
+  const staff = await makeStaff({
+    companyId: company.company._id,
+    department: company.finance._id,
+    createdBy: company.head._id,
+  });
+  const saturdayCheckIn = new Date("2026-10-24T06:00:00.000Z");
+  await Attendance.create({
+    companyId: staff.employee.companyId,
+    employeeId: staff.employee._id,
+    userId: staff.employee.userId,
+    date: "2026-10-24",
+    checkIn: {
+      at: saturdayCheckIn,
+      latitude: HEAD_OFFICE.latitude,
+      longitude: HEAD_OFFICE.longitude,
+      locationName: "Nilric Head Office",
+      withinGeofence: true,
+    },
+    lastSeen: {
+      at: new Date("2026-10-24T09:45:00.000Z"),
+      latitude: HEAD_OFFICE.latitude,
+      longitude: HEAD_OFFICE.longitude,
+      locationName: "Nilric Head Office",
+      withinGeofence: true,
+    },
+    lastSeenInsideAt: new Date("2026-10-24T09:45:00.000Z"),
+    lastSeenInside: {
+      at: new Date("2026-10-24T09:45:00.000Z"),
+      latitude: HEAD_OFFICE.latitude,
+      longitude: HEAD_OFFICE.longitude,
+      locationName: "Nilric Head Office",
+      withinGeofence: true,
+    },
+    status: "Present",
+    source: "GPS",
+  });
+
+  const result = await sweepCompanyDay({
+    companyId: company.company._id,
+    now: new Date("2026-10-24T09:49:00.000Z"), // 12:49 EAT
+  });
+  const stored = await Attendance.findOne({ employeeId: staff.employee._id }).lean();
+
+  assert.equal(result.scheduled, 1);
+  assert.equal(stored.autoClockOut.scheduledFor.toISOString(), "2026-10-24T10:00:00.000Z");
+});
+
+test("Sunday sweep leaves any open record untouched", async () => {
+  const company = await seedOrganisation({ name: "Sunday schedule company" });
+  const staff = await makeStaff({
+    companyId: company.company._id,
+    department: company.finance._id,
+    createdBy: company.head._id,
+  });
+  await createOpenDay(staff.employee, "2026-10-25");
+
+  const result = await sweepCompanyDay({
+    companyId: company.company._id,
+    now: new Date("2026-10-25T14:05:00.000Z"),
+  });
+  const stored = await Attendance.findOne({ employeeId: staff.employee._id }).lean();
+
+  assert.equal(result.checked, 0);
+  assert.equal(stored.checkOut, null);
 });
 
 test("scheduled requests reject missing and incorrect secrets", async () => {

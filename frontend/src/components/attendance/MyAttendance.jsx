@@ -325,11 +325,14 @@ const MyAttendance = () => {
     };
 
     const end = toMinutes(policy.workEnd, 17 * 60);
+    const saturdayEnd = toMinutes(policy.saturdayWorkEnd, 13 * 60);
+    const confirmMinutes = Number(policy.autoClockOutConfirmMinutes ?? 15) || 0;
 
     return {
       workEnd: label(end),
-      early: label(end - (Number(policy.earlyDepartureCheckMinutes) || 0)),
-      confirm: label(end - (Number(policy.autoClockOutConfirmMinutes) || 0)),
+      saturdayEnd: label(saturdayEnd),
+      confirm: label(end - confirmMinutes),
+      saturdayConfirm: label(saturdayEnd - confirmMinutes),
     };
   }, [today?.policy]);
 
@@ -603,10 +606,13 @@ const MyAttendance = () => {
                 <span className="font-mono font-semibold text-slate-700">
                   {automation.workEnd}
                 </span>{" "}
-                when your device is still on site at{" "}
-                <span className="font-mono">{automation.confirm}</span>, or
-                earlier if your device leaves the premises after{" "}
-                <span className="font-mono">{automation.early}</span>.
+                when your device is still on site near the scheduled end
+                ({automation.workEnd} on weekdays, {automation.saturdayEnd}{" "}
+                Saturday). If you leave before then, it records the last on-site
+                location and time, then clocks you out at the scheduled end. The
+                confirmation checks are {automation.confirm} weekdays and{" "}
+                {automation.saturdayConfirm} Saturday. Sunday is a non-working
+                day.
               </p>
             </div>
           )}

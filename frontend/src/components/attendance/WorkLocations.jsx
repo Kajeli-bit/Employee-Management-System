@@ -228,6 +228,8 @@ const WorkLocations = () => {
   const [policy, setPolicy] = useState({
     workStart: "08:00",
     workEnd: "17:00",
+    saturdayWorkStart: "09:00",
+    saturdayWorkEnd: "13:00",
     graceMinutes: 15,
     halfDayMinutes: 240,
     requireGeofence: true,
@@ -974,6 +976,49 @@ const WorkLocations = () => {
                 />
               </label>
             </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-800">Saturday hours</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-600">
+                  Work starts
+                </span>
+                <input
+                  type="time"
+                  value={policy.saturdayWorkStart}
+                  onChange={(event) =>
+                    setPolicy((current) => ({
+                      ...current,
+                      saturdayWorkStart: event.target.value,
+                    }))
+                  }
+                  disabled={!canManagePolicy}
+                  className={monoFieldClass}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-600">
+                  Work ends
+                </span>
+                <input
+                  type="time"
+                  value={policy.saturdayWorkEnd}
+                  onChange={(event) =>
+                    setPolicy((current) => ({
+                      ...current,
+                      saturdayWorkEnd: event.target.value,
+                    }))
+                  }
+                  disabled={!canManagePolicy}
+                  className={monoFieldClass}
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Sunday is a non-working day.
+            </p>
           </div>
 
           <div className="rounded-xl bg-slate-50 p-4">

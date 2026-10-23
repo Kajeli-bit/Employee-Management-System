@@ -254,6 +254,8 @@ export const updateAttendancePolicy = async (req, res) => {
     const {
       workStart,
       workEnd,
+      saturdayWorkStart,
+      saturdayWorkEnd,
       graceMinutes,
       halfDayMinutes,
       requireGeofence,
@@ -276,10 +278,34 @@ export const updateAttendancePolicy = async (req, res) => {
       });
     }
 
+    if (saturdayWorkStart && !timePattern.test(saturdayWorkStart)) {
+      return res.status(400).json({
+        success: false,
+        error: "Saturday work start must be in HH:mm format",
+      });
+    }
+
+    if (saturdayWorkEnd && !timePattern.test(saturdayWorkEnd)) {
+      return res.status(400).json({
+        success: false,
+        error: "Saturday work end must be in HH:mm format",
+      });
+    }
+
     const update = {};
 
     if (workStart) update["attendance.workStart"] = workStart;
     if (workEnd) update["attendance.workEnd"] = workEnd;
+    if (saturdayWorkStart) {
+      update["attendance.saturdayWorkStart"] = saturdayWorkStart;
+    }
+    if (saturdayWorkEnd) {
+      update["attendance.saturdayWorkEnd"] = saturdayWorkEnd;
+    }
+
+    // Saving a policy through this endpoint always makes Sunday a non-working
+    // day while Saturday remains part of the schedule.
+    update["attendance.weekendDays"] = [0];
 
     if (graceMinutes !== undefined) {
       update["attendance.graceMinutes"] = Math.max(

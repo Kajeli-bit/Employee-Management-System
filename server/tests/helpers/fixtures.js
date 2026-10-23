@@ -82,6 +82,8 @@ export const seedOrganisation = async ({
       timezone: "Africa/Dar_es_Salaam",
       workStart: "08:00",
       workEnd: "17:00",
+      saturdayWorkStart: "09:00",
+      saturdayWorkEnd: "13:00",
       graceMinutes: 15,
       halfDayMinutes: 240,
       requireGeofence: true,

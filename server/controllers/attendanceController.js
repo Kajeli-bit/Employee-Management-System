@@ -27,10 +27,12 @@ const DEFAULT_POLICY = {
   timezone: DEFAULT_TIMEZONE,
   workStart: "08:00",
   workEnd: "17:00",
+  saturdayWorkStart: "09:00",
+  saturdayWorkEnd: "13:00",
   graceMinutes: 15,
   halfDayMinutes: 240,
   requireGeofence: true,
-  weekendDays: [0, 6],
+  weekendDays: [0],
   // Automatic clock-out: an early-departure check 90 minutes before the end of
   // the day, a presence check 15 minutes before, and the close itself at the
   // end of the day.
@@ -223,6 +225,15 @@ export const checkIn = async (req, res) => {
     const policy = getPolicy(company);
     const now = new Date();
     const date = localDateKey(now, policy.timezone);
+    const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+
+    if (weekday === 0) {
+      return res.status(403).json({
+        success: false,
+        error: "Attendance cannot be recorded on Sunday because it is a non-working day.",
+      });
+    }
+
     const position = parsePosition(req.body);
 
     if (!position.valid) {
@@ -273,8 +284,12 @@ export const checkIn = async (req, res) => {
     }
 
     const minutesNow = localMinutesOfDay(now, policy.timezone);
+    const isSaturday = weekday === 6;
+    const workStart = isSaturday
+      ? policy.saturdayWorkStart || "09:00"
+      : policy.workStart || "08:00";
     const expectedStart =
-      timeStringToMinutes(policy.workStart, 8 * 60) +
+      timeStringToMinutes(workStart, 8 * 60) +
       Number(policy.graceMinutes || 0);
     const lateByMinutes = Math.max(0, minutesNow - expectedStart);
 

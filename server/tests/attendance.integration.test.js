@@ -62,6 +62,73 @@ const clockOut = (user, position = HEAD_OFFICE) =>
 const recordFor = (employee) =>
   Attendance.findOne({ employeeId: employee._id }).lean();
 
+test("Saturday check-in uses the 09:00 start for its lateness calculation", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const { user } = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+  });
+
+  const realDate = globalThis.Date;
+  globalThis.Date = class extends realDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super("2026-10-24T06:00:00.000Z"); // 09:00 EAT, Saturday
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return new realDate("2026-10-24T06:00:00.000Z").getTime();
+    }
+  };
+
+  let res;
+  try {
+    res = await clockIn(user);
+  } finally {
+    globalThis.Date = realDate;
+  }
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.record.lateByMinutes, 0);
+});
+
+test("Sunday clock-in is rejected as a non-working day", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const { user, employee } = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+  });
+
+  const realDate = globalThis.Date;
+  globalThis.Date = class extends realDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super("2026-10-25T05:00:00.000Z"); // 08:00 EAT, Sunday
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return new realDate("2026-10-25T05:00:00.000Z").getTime();
+    }
+  };
+
+  let res;
+  try {
+    res = await clockIn(user);
+  } finally {
+    globalThis.Date = realDate;
+  }
+
+  assert.equal(res.statusCode, 403);
+  assert.match(res.body.error, /Sunday.*non-working day/i);
+  assert.equal(await Attendance.countDocuments({ employeeId: employee._id }), 0);
+});
+
 test("a fix inside the head office fence is accepted", async () => {
   const { company, finance, head } = await seedOrganisation();
   const { user } = await makeStaff({
