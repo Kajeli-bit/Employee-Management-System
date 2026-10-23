@@ -234,12 +234,13 @@ const MyAttendance = () => {
     const onHeartbeat = (event) => {
       if (event.detail?.success) {
         setToday(event.detail);
-      }
+        setLoading(false);
 
-      // History contains the persisted checkout, which only needs reloading
-      // when the sweep has actually closed today's record.
-      if (event.detail?.record?.checkOut) {
-        load({ silent: true });
+        // History contains the persisted checkout, which only needs reloading
+        // when the sweep has actually closed today's record.
+        if (event.detail?.record?.checkOut) {
+          load({ silent: true });
+        }
       }
     };
 
@@ -469,12 +470,11 @@ const MyAttendance = () => {
                             {record.checkIn.locationName || "Field check-in"}
                           </span>
                         </span>
-                        {!checkedOut && record.tracking?.lastSeenAt && (
+                        {!checkedOut && (
                           <span className="inline-flex items-center gap-1 text-emerald-800/80">
-                            Last position {formatClock(record.tracking.lastSeenAt)} ·{" "}
-                            {record.tracking.withinGeofence
-                              ? "on site"
-                              : "away from site"}
+                            {record.tracking?.lastSeenAt
+                              ? `Last position ${formatClock(record.tracking.lastSeenAt)} · ${record.tracking.withinGeofence ? "on site" : "away from site"}`
+                              : "No location update received yet · keep this app open and allow location access"}
                           </span>
                         )}
                       </p>

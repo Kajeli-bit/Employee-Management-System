@@ -54,6 +54,7 @@ import OrgChart from "./components/org/OrgChart";
 
 // Employee Dashboard
 import EmployeeSummary from "./components/EmployeeDashboard/EmployeeSummary";
+import AttendanceHeartbeat from "./components/attendance/AttendanceHeartbeat";
 import MyLeaves from "./components/EmployeeDashboard/MyLeaves";
 import EditLeave from "./components/EmployeeDashboard/EditLeave";
 import Setting from "./components/EmployeeDashboard/Setting";
@@ -61,6 +62,7 @@ import Setting from "./components/EmployeeDashboard/Setting";
 function App() {
   return (
     <BrowserRouter>
+      <AttendanceHeartbeat />
       <Routes>
 
        

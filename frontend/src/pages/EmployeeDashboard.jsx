@@ -1,15 +1,10 @@
 import Sidebar from "../components/EmployeeDashboard/Sidebar";
 import { Outlet } from "react-router-dom";
 import Navbar from "../components/dashboard/Navbar";
-import AttendanceHeartbeat from "../components/attendance/AttendanceHeartbeat";
 
 const EmployeeDashboard = () => {
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-brand-50 to-violet-50">
-
-      {/* Reports the device position while a day is open, so a forgotten
-          clock-out can be closed automatically. Renders nothing. */}
-      <AttendanceHeartbeat />
 
       
 
