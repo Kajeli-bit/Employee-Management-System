@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
@@ -35,6 +35,9 @@ const Field = ({ label, name, value, onChange, ...rest }) => (
 const Login = () => {
   // null until checked; true only while the database has no company yet.
   const [setupRequired, setSetupRequired] = useState(null);
+  // Set when the probe itself fails. That is a different problem from an
+  // account that was never added, and it used to be reported as one.
+  const [serverUnreachable, setServerUnreachable] = useState(false);
   const [form, setForm] = useState({
     name: "",
     dob: "",
@@ -57,12 +60,23 @@ const Login = () => {
   const clerkLoaded = clerk.loaded;
   const navigate = useNavigate();
 
-  useEffect(() => {
+  // State is only written from the response handlers, never synchronously, so
+  // mounting the page does not trigger a second render pass.
+  const checkSetup = useCallback(() => {
     axios
       .get(`${API_URL}/api/auth/setup-status`)
-      .then((res) => setSetupRequired(Boolean(res.data.setupRequired)))
-      .catch(() => setSetupRequired(false));
+      .then((res) => {
+        setServerUnreachable(false);
+        setSetupRequired(Boolean(res.data.setupRequired));
+      })
+      .catch(() => {
+        setServerUnreachable(true);
+      });
   }, []);
+
+  useEffect(() => {
+    checkSetup();
+  }, [checkSetup]);
 
   // The company's first account must use the email it signed in with.
   useEffect(() => {
@@ -249,10 +263,34 @@ const Login = () => {
             <div className="py-6 text-center">
               {loading || user ? (
                 <Loader label="Opening your dashboard…" />
-              ) : setupRequired === null ? (
+              ) : setupRequired === null && !serverUnreachable ? (
                 <p className="text-sm text-gray-600">
                   Checking company setup...
                 </p>
+              ) : serverUnreachable ? (
+                <>
+                  <p className="mb-4 text-sm text-gray-600">
+                    Your sign-in worked, but the Employee Management
+                    server could not be reached, so your account
+                    could not be checked. Try again in a moment.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+                    <button
+                      type="button"
+                      onClick={checkSetup}
+                      className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+                    >
+                      Try again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={signOutOfClerk}
+                      className="text-sm font-semibold text-gray-500 transition hover:text-gray-700 hover:underline"
+                    >
+                      Use a different sign-in
+                    </button>
+                  </div>
+                </>
               ) : setupRequired === false ? (
                 <>
                   <p className="mb-4 text-sm text-gray-600">

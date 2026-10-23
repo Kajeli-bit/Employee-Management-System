@@ -19,10 +19,16 @@ import orgRouter from "./routes/org.js";
 
 import connectToDatabase from "./db/db.js";
 
-dns.setServers([
-  "1.1.1.1",
-  "8.8.8.8",
-]);
+// Lambda-based hosts such as Vercel resolve mongodb+srv records through their
+// own resolver, and forcing public resolvers there leaves the Atlas lookup
+// hanging until every query times out. Keep the override for local development,
+// where some ISPs answer Atlas SRV queries badly.
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  dns.setServers([
+    "1.1.1.1",
+    "8.8.8.8",
+  ]);
+}
 
 const app = express();
 
@@ -54,6 +60,26 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Says whether this deployment can actually reach Atlas. Only the verdict is
+// exposed: no host, credentials or driver message ever leaves the server.
+app.get("/api/health/database", async (req, res) => {
+  try {
+    await connectToDatabase();
+
+    return res.status(200).json({
+      success: true,
+      database: "connected",
+    });
+  } catch {
+    return res.status(503).json({
+      success: false,
+      database: process.env.ATLASDB_URL
+        ? "unreachable"
+        : "not-configured",
+    });
+  }
+});
+
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/department", departmentRouter);
@@ -65,8 +91,11 @@ app.use("/api/attendance", attendanceRouter);
 app.use("/api/locations", locationRouter);
 app.use("/api/org", orgRouter);
 
-// Database
-connectToDatabase();
+// Database. Requests wait for this shared connection in the driver's buffer,
+// and the health route above reports it when Atlas cannot be reached.
+void connectToDatabase().catch(() => {
+  // Already logged by the connection helper; the next request retries.
+});
 
 // Vercel imports the exported app as a function. Listen only when this file is
 // run directly (node index.js / npm start), so local development still works.
