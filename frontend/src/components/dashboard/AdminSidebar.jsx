@@ -5,7 +5,6 @@ import {
   FaClock,
   FaClipboardList,
   FaMapMarkedAlt,
-  FaMoneyBillWave,
   FaSignOutAlt,
   FaSitemap,
   FaTachometerAlt,
@@ -43,7 +42,6 @@ const AdminSidebar = () => {
   const showEmployees = can(CAPABILITIES.PEOPLE_VIEW);
   const showDepartments = can(CAPABILITIES.DEPARTMENTS_VIEW);
   const showLeave = can(CAPABILITIES.LEAVES_APPROVE) || can(CAPABILITIES.LEAVES_VIEW);
-  const showSalary = can(CAPABILITIES.SALARIES_MANAGE) || can(CAPABILITIES.SALARIES_VIEW);
   const showAttendance = can(CAPABILITIES.ATTENDANCE_VIEW);
   const showLocations = can(CAPABILITIES.LOCATIONS_MANAGE);
 
@@ -111,13 +109,6 @@ const AdminSidebar = () => {
           <NavLink to="/admin-dashboard/work-locations" className={menuClass}>
             <FaMapMarkedAlt />
             <span>Work locations</span>
-          </NavLink>
-        )}
-
-        {showSalary && (
-          <NavLink to="/admin-dashboard/salary" className={menuClass}>
-            <FaMoneyBillWave />
-            <span>Salary</span>
           </NavLink>
         )}
 

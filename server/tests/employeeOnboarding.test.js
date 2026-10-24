@@ -9,7 +9,10 @@ import {
   disconnectTestDb,
 } from "./helpers/harness.js";
 import { makeStaff, seedOrganisation } from "./helpers/fixtures.js";
-import { addEmployee } from "../controllers/employeeController.js";
+import {
+  addEmployee,
+  updateEmployee,
+} from "../controllers/employeeController.js";
 import User from "../models/User.js";
 import Employee from "../models/Employee.js";
 
@@ -84,7 +87,7 @@ test("name, work email and phone are enough to add a worker", async () => {
   assert.equal(user.name, "Amina Juma");
   assert.equal(user.role, "worker");
   assert.equal(user.username, "amina.juma", "username comes from the email");
-  assert.equal(user.designation, "");
+  assert.equal(user.designation, "Worker");
   assert.equal(user.dob, undefined);
 
   const employee = await Employee.findOne({ userId: user._id });
@@ -190,4 +193,67 @@ test("HR cannot appoint another HR account", async () => {
   assert.equal(res.statusCode, 403);
   assert.match(res.body.error, /below your role/i);
   assert.equal(clerk.state.created, null);
+});
+
+test("the Managing Director can assign HR to an existing worker", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const { user: worker, employee } = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    role: "worker",
+    createdBy: head._id,
+    employeeId: "EMP-ROLE-1",
+  });
+  const res = createRes();
+
+  await updateEmployee(
+    createReq({
+      user: head,
+      params: { id: employee._id.toString() },
+      body: { role: "hr" },
+    }),
+    res
+  );
+
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+  assert.equal(res.body.role, "hr");
+  assert.equal((await User.findById(worker._id)).role, "hr");
+});
+
+test("HR can edit a worker but cannot assign HR or Managing Director", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const { user: worker, employee } = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    role: "worker",
+    createdBy: head._id,
+    employeeId: "EMP-ROLE-2",
+  });
+
+  const update = async (role) => {
+    const res = createRes();
+
+    await updateEmployee(
+      createReq({
+        user: actor,
+        params: { id: employee._id.toString() },
+        body: { role },
+      }),
+      res
+    );
+
+    return res;
+  };
+
+  const hrPromotion = await update("hr");
+  assert.equal(hrPromotion.statusCode, 403);
+  assert.match(hrPromotion.body.error, /cannot assign this role/i);
+
+  const mdPromotion = await update("managing_director");
+  assert.equal(mdPromotion.statusCode, 403);
+
+  const workerUpdate = await update("worker");
+  assert.equal(workerUpdate.statusCode, 200, JSON.stringify(workerUpdate.body));
+  assert.equal((await User.findById(worker._id)).role, "worker");
 });

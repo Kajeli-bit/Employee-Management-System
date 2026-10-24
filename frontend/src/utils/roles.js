@@ -46,6 +46,7 @@ const COMPANY = [
 export const ROLES = {
   managing_director: {
     label: "Managing Director",
+    designation: "Managing Director",
     level: 100,
     tier: "Executive",
     scope: "company",
@@ -57,6 +58,7 @@ export const ROLES = {
   },
   hr: {
     label: "HR",
+    designation: "Human Resource Manager",
     level: 90,
     tier: "Management",
     scope: "company",
@@ -68,6 +70,7 @@ export const ROLES = {
   },
   worker: {
     label: "Worker",
+    designation: "Worker",
     level: 10,
     tier: "Staff",
     scope: "self",
@@ -118,6 +121,12 @@ export const getRole = (role) => {
 
   return key ? { key, ...ROLES[key] } : null;
 };
+
+export const designationForRole = (role) =>
+  getRole(role)?.designation || "Worker";
+
+export const roleForDesignation = (designation) =>
+  Object.entries(ROLES).find(([, role]) => role.designation === designation)?.[0] || null;
 
 export const roleLabel = (role) => getRole(role)?.label || role || "Worker";
 

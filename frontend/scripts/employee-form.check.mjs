@@ -8,6 +8,10 @@ import {
   suggestSupervisorFor,
   validateWorker,
 } from "../src/utils/employeeForm.js";
+import {
+  designationForRole,
+  roleForDesignation,
+} from "../src/utils/roles.js";
 
 const server = await createServer({
   server: { middlewareMode: true },
@@ -43,11 +47,6 @@ try {
     { _id: "l1", name: "Nilric Head Office", isPrimary: true, address: "Samora Avenue" },
     { _id: "l2", name: "Kariakoo Branch", isPrimary: false },
   ];
-  const jobTitles = [
-    { title: "Accountant", departmentKey: "finance" },
-    { title: "Civil Engineer", departmentKey: "engineering" },
-  ];
-
   const baseInitial = {
     name: "Amina Juma",
     username: "amina.juma",
@@ -55,7 +54,7 @@ try {
     employeeId: "NIL-26-1234",
     role: "worker",
     department: "t1",
-    designation: "Accountant",
+    designation: "Worker",
     salary: "850000",
     reportsTo: "s-md",
     workLocation: "l1",
@@ -71,7 +70,6 @@ try {
         departments,
         supervisors,
         locations,
-        jobTitles,
         initial: baseInitial,
         onSubmit: () => {},
         onCancel: () => {},
@@ -101,6 +99,12 @@ try {
     labels.every((label) => mdPicker.includes(label))
   );
   check("the picker renders three cards", (mdPicker.match(/aria-pressed/g) || []).length === 3);
+  check(
+    "the picker lays roles out horizontally from senior to junior",
+    mdPicker.includes('class="grid grid-cols-1 gap-2 sm:grid-cols-3"') &&
+      mdPicker.indexOf("Managing Director") < mdPicker.indexOf(">HR<") &&
+      mdPicker.indexOf(">HR<") < mdPicker.indexOf(">Worker<")
+  );
   check(
     "MD can assign HR and Worker but not another MD",
     (mdPicker.match(/disabled="" aria-pressed/g) || []).length === 1
@@ -231,7 +235,25 @@ try {
   );
   check("position step has the home site picker", position.includes("Kariakoo Branch") && position.includes("Home site"));
   check("position step shows probation and contract dates", position.includes("Probation ends") && position.includes("Contract ends"));
-  check("designation suggests department titles", position.includes('value="Accountant"'));
+  const designationOptions = position.match(
+    /<option value="(?:Managing Director|Human Resource Manager|Worker)"/g
+  ) || [];
+  check(
+    "designation offers exactly the three role names",
+    designationOptions.length === 3 &&
+      ["Managing Director", "Human Resource Manager", "Worker"].every((designation) =>
+        position.includes(`value="${designation}"`)
+      ) &&
+      !position.includes("Accountant") &&
+      !position.includes("Civil Engineer")
+  );
+  check(
+    "each designation maps to its matching role",
+    designationForRole("managing_director") === "Managing Director" &&
+      designationForRole("hr") === "Human Resource Manager" &&
+      designationForRole("worker") === "Worker" &&
+      roleForDesignation("Human Resource Manager") === "hr"
+  );
 
   // Step 3 — contacts
   const contacts = render({ initialStep: 2 });
@@ -266,6 +288,7 @@ try {
     minimalReview.includes("Amina Juma") && minimalReview.includes("—")
   );
   check("review step names the supervisor", review.includes("Manager"));
+  check("role changes have matching designations in review", review.includes("Worker"));
   check("review step shows the access scope", review.includes("Own records only"));
   check("the retired company-visibility toggle is gone", !review.includes("Grant company-wide visibility"));
 

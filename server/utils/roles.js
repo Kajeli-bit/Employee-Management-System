@@ -55,6 +55,7 @@ export const ROLES = {
   managing_director: {
     key: "managing_director",
     label: "Managing Director",
+    designation: "Managing Director",
     level: 100,
     tier: "Executive",
     scope: "company",
@@ -66,6 +67,7 @@ export const ROLES = {
   hr: {
     key: "hr",
     label: "HR",
+    designation: "Human Resource Manager",
     level: 90,
     tier: "Management",
     scope: "company",
@@ -77,6 +79,7 @@ export const ROLES = {
   worker: {
     key: "worker",
     label: "Worker",
+    designation: "Worker",
     level: 10,
     tier: "Staff",
     scope: "self",
@@ -114,8 +117,12 @@ export const LEGACY_ROLE_KEYS = Object.keys(LEGACY_ROLE_ALIASES);
 export const ROLE_OPTIONS = ROLE_KEYS.map((key, index) => ({
   value: key,
   label: ROLES[key].label,
+  designation: ROLES[key].designation,
   level: ROLES[key].level,
   tier: ROLES[key].tier,
+  scope: ROLES[key].scope,
+  description: ROLES[key].description,
+  capabilities: ROLES[key].capabilities,
   order: index,
 }));
 
@@ -196,6 +203,12 @@ export const isDepartmentScoped = (role) =>
 
 export const roleLabel = (role) => getRole(role)?.label || role || "";
 
+export const designationForRole = (role) =>
+  getRole(role)?.designation || "Worker";
+
+export const roleForDesignation = (designation) =>
+  ROLE_KEYS.find((key) => ROLES[key].designation === designation) || null;
+
 // Stored role values that mean the same thing. Filtering the directory by "HR"
 // must also match accounts still saved as department_manager or manager.
 export const roleFilterAliases = (role) => {
@@ -217,6 +230,7 @@ export const publicRoleCatalog = () =>
   ROLE_KEYS.map((key) => ({
     key,
     label: ROLES[key].label,
+    designation: ROLES[key].designation,
     level: ROLES[key].level,
     tier: ROLES[key].tier,
     scope: ROLES[key].scope,

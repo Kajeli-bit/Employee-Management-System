@@ -19,6 +19,9 @@ import {
   isValidRole,
   roleFilterAliases,
   roleLevel,
+  designationForRole,
+  roleForDesignation,
+  resolveRole,
 } from "../utils/roles.js";
 import {
   canManageEmployee,
@@ -185,7 +188,30 @@ export const addEmployee = async (req, res, options = {}) => {
     }
 
     // Onboarding creates a worker unless a role is chosen explicitly.
-    const requestedRole = req.body.role || "worker";
+    const requestedDesignationRole = roleForDesignation(
+      String(req.body.designation || "").trim()
+    );
+    const requestedRole = req.body.role
+      ? resolveRole(req.body.role)
+      : requestedDesignationRole || "worker";
+
+    if (req.body.role && !requestedRole) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid employee role",
+      });
+    }
+
+    if (
+      req.body.role &&
+      req.body.designation &&
+      requestedDesignationRole !== requestedRole
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Designation must match the selected role",
+      });
+    }
 
     if (!isValidRole(requestedRole)) {
       return res.status(400).json({
@@ -475,7 +501,7 @@ export const addEmployee = async (req, res, options = {}) => {
 
       role: requestedRole,
 
-      designation: designation?.trim() || "",
+      designation: designationForRole(requestedRole),
 
       companyId: req.user.companyId,
 
@@ -541,7 +567,7 @@ export const addEmployee = async (req, res, options = {}) => {
 
         maritalStatus,
 
-        designation: designation?.trim() || "",
+        designation: designationForRole(requestedRole),
 
         department: verifiedDepartment,
 
@@ -1025,8 +1051,39 @@ export const updateEmployee = async (
       });
     }
 
+    const requestedDesignationRole =
+      designation !== undefined
+        ? roleForDesignation(String(designation).trim())
+        : null;
+    const requestedRole = role !== undefined ? resolveRole(role) : null;
+
+    if (role !== undefined && !requestedRole) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid role",
+      });
+    }
+
     const updatedRole =
-      role || currentTargetRole;
+      requestedRole || requestedDesignationRole || currentTargetRole;
+
+    if (
+      requestedRole &&
+      requestedDesignationRole &&
+      requestedRole !== requestedDesignationRole
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Designation must match the selected role",
+      });
+    }
+
+    if (designation !== undefined && !requestedDesignationRole) {
+      return res.status(400).json({
+        success: false,
+        error: "Choose one of the three supported designations",
+      });
+    }
 
     if (!isValidRole(updatedRole)) {
       return res.status(400).json({
@@ -1174,10 +1231,7 @@ export const updateEmployee = async (
         maritalStatus;
     }
 
-    if (designation !== undefined) {
-      employee.designation =
-        designation.trim();
-    }
+    employee.designation = designationForRole(updatedRole);
 
     if (department !== undefined) {
       employee.department =
@@ -1216,10 +1270,7 @@ export const updateEmployee = async (
             ? supervisor.value
             : employee.userId.reportsTo || null,
 
-        designation:
-          designation !== undefined
-            ? designation.trim()
-            : employee.userId.designation,
+        designation: designationForRole(updatedRole),
 
         dob:
           dob !== undefined

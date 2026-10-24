@@ -13,7 +13,12 @@ import {
   splitList,
   usernameFromEmail,
 } from "../utils/employeeProfile.js";
-import { ROLE_KEYS, publicRoleCatalog } from "../utils/roles.js";
+import {
+  ROLE_KEYS,
+  designationForRole,
+  publicRoleCatalog,
+  roleForDesignation,
+} from "../utils/roles.js";
 import Employee from "../models/Employee.js";
 import User from "../models/User.js";
 import mongoose from "mongoose";
@@ -214,6 +219,14 @@ test("the employee record accepts the new onboarding fields", async () => {
   assert.equal(employee.passportNumber, "P-1");
 });
 
+test("role designations are the exact three role names", () => {
+  assert.equal(designationForRole("managing_director"), "Managing Director");
+  assert.equal(designationForRole("hr"), "Human Resource Manager");
+  assert.equal(designationForRole("worker"), "Worker");
+  assert.equal(roleForDesignation("Human Resource Manager"), "hr");
+  assert.equal(roleForDesignation("Accountant"), null);
+});
+
 test("the picker can render every role from the public catalogue", () => {
   const catalog = publicRoleCatalog();
 
@@ -223,6 +236,7 @@ test("the picker can render every role from the public catalogue", () => {
   for (const role of catalog) {
     assert.ok(role.key);
     assert.ok(role.label);
+    assert.ok(role.designation);
     assert.ok(role.tier, `${role.key} needs a tier for grouping`);
     assert.ok(role.scope, `${role.key} needs a scope for the access hint`);
     assert.equal(typeof role.description, "string");

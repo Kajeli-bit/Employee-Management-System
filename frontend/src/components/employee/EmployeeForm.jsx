@@ -13,13 +13,14 @@ import {
   ROLE_OPTIONS,
   WORK_MODES,
   capabilityLabels,
-  groupRolesByTier,
+  assignableRoles,
   hasCapability,
   roleLevel,
+  designationForRole,
+  roleForDesignation,
   scopeLabel,
 } from "../../utils/roles";
 import {
-  parentDepartmentOf,
   suggestSupervisorFor,
 } from "../../utils/employeeForm";
 
@@ -59,6 +60,7 @@ const normaliseRole = (role) => ({
   value: role.value ?? role.key,
   key: role.key ?? role.value,
   label: role.label,
+  designation: role.designation,
   level: role.level,
   tier: role.tier,
   scope: role.scope,
@@ -137,7 +139,8 @@ export const RoleAccess = ({ role }) => {
 export const RolePicker = ({ roles, value, actorRole, onSelect }) => {
   const actorLevel = roleLevel(actorRole);
   const canGrant = hasCapability(actorRole, CAPABILITIES.PEOPLE_MANAGE);
-  const groups = groupRolesByTier(roles);
+  // One horizontal ladder: executive authority first, team access last.
+  const orderedRoles = [...roles].sort((left, right) => right.level - left.level);
   const assignable = roles.filter(
     (role) => canGrant && actorLevel > role.level
   ).length;
@@ -152,23 +155,16 @@ export const RolePicker = ({ roles, value, actorRole, onSelect }) => {
         </span>
       </div>
 
-      <div className="space-y-3">
-        {groups.map((group) => (
-          <div key={group.tier}>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-              {group.tier}
-            </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {orderedRoles.map((role) => {
+          const selected = value === role.value;
+          const disabled = !canGrant || actorLevel <= role.level;
+          const reason = !canGrant
+            ? "You cannot assign roles"
+            : `Only roles below L${actorLevel} can be assigned by you`;
 
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {group.roles.map((role) => {
-                const selected = value === role.value;
-                const disabled = !canGrant || actorLevel <= role.level;
-                const reason = !canGrant
-                  ? "You cannot assign roles"
-                  : `Only roles below L${actorLevel} can be assigned by you`;
-
-                return (
-                  <button
+          return (
+            <button
                     key={role.value}
                     type="button"
                     disabled={disabled}
@@ -219,12 +215,9 @@ export const RolePicker = ({ roles, value, actorRole, onSelect }) => {
                       <span aria-hidden="true">·</span>
                       <span>{scopeLabel(role.scope)}</span>
                     </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
       <p className="mt-2 text-[11px] leading-5 text-slate-400">
@@ -248,7 +241,6 @@ const EmployeeForm = ({
   initial = {},
   departments = [],
   supervisors = [],
-  jobTitles = [],
   locations = [],
   roleCatalog = [],
   currentUserRole,
@@ -278,7 +270,7 @@ const EmployeeForm = ({
     designation: "",
     department: "",
     salary: "",
-    role: "employee",
+    role: "worker",
     reportsTo: "",
     employmentType: "Full-time",
     employmentStatus: "Active",
@@ -355,8 +347,6 @@ const EmployeeForm = ({
   const selectedDepartment = departments.find(
     (entry) => entry._id === form.department
   );
-  const selectedParent = parentDepartmentOf(departments, form.department);
-
   const selectedSupervisor = supervisors.find(
     (supervisor) => supervisor._id === form.reportsTo
   );
@@ -364,20 +354,13 @@ const EmployeeForm = ({
     (location) => location._id === form.workLocation
   );
 
-  // Titles suggested for the department the employee is joining, with the full
-  // catalogue as a fallback so a custom title can still be typed.
-  const designationSuggestions = useMemo(() => {
-    if (!form.department || jobTitles.length === 0) {
-      return jobTitles;
-    }
-
-    const parent = parentDepartmentOf(departments, form.department);
-    const filtered = jobTitles.filter(
-      (entry) => !parent?.key || entry.departmentKey === parent.key
-    );
-
-    return filtered.length > 0 ? filtered : jobTitles;
-  }, [form.department, departments, jobTitles]);
+  // The designation catalogue mirrors the three access roles, so choosing a
+  // designation also selects the matching role.
+  const designationOptions = useMemo(
+    () => roles.filter((role) => role.designation),
+    [roles]
+  );
+  const assignableRoleKeys = assignableRoles(currentUserRole);
 
   const change = (event) => {
     const { name, value, files, checked, type } = event.target;
@@ -389,6 +372,16 @@ const EmployeeForm = ({
 
     if (type === "checkbox") {
       setForm((current) => ({ ...current, [name]: checked }));
+      return;
+    }
+
+    if (name === "designation") {
+      const nextRole = roleForDesignation(value);
+
+      if (nextRole) {
+        chooseRole(nextRole);
+      }
+
       return;
     }
 
@@ -422,6 +415,7 @@ const EmployeeForm = ({
       return {
         ...current,
         role: nextRole,
+        designation: designationForRole(nextRole),
         // A supervisor who is no longer senior enough is cleared rather than
         // left in the form to be rejected on save.
         reportsTo:
@@ -571,8 +565,9 @@ const EmployeeForm = ({
             What can they do?
           </h2>
           <p className="mt-0.5 text-xs leading-5 text-slate-500">
-            The role decides access. The department and job title place the
-            person on the organisation chart.
+            Choose one of three access roles. The MD can assign HR or Worker;
+            HR can assign Worker. Department and job title set their place on
+            the organisation chart.
           </p>
         </div>
 
@@ -591,24 +586,24 @@ const EmployeeForm = ({
       <Section title="Where do they sit?">
         <Field
           label="Designation"
-          hint={
-            selectedParent
-              ? `Suggested titles for ${selectedParent.dep_name}.`
-              : "Job title, e.g. Mechanical Engineer."
-          }
+          hint="Designation matches the access role. Choose the role above to update it."
         >
-          <input
+          <select
             name="designation"
             value={form.designation}
             onChange={change}
-            list="nilric-job-titles"
             className={inputClass}
-          />
-          <datalist id="nilric-job-titles">
-            {designationSuggestions.map((entry) => (
-              <option key={entry.title} value={entry.title} />
+          >
+            {designationOptions.map((role) => (
+              <option
+                key={role.designation}
+                value={role.designation}
+                disabled={!assignableRoleKeys.includes(role.value)}
+              >
+                {role.designation}
+              </option>
             ))}
-          </datalist>
+          </select>
         </Field>
 
         <Field

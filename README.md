@@ -122,9 +122,10 @@ On save the server creates the Clerk login, derives the username from the email 
 
 Everything else lives on the profile, which HR fills in from **Employees → open → Edit**. The editor keeps five steps: **Identity → Position → Contacts & emergency → Statutory & documents → Access & review**, and nothing in it is mandatory, so a record can be completed a field at a time. That is where department, supervisor, salary, home site, dates, statutory numbers and documents are added.
 
-- **Every role is listed in the editor.** The picker is grouped by tier (Executive, Management, Staff) and rendered from the server catalogue, so changing a role never requires a frontend release. Roles at or above the signed-in user's level are shown but locked with the reason: only lower levels can be created, which the server enforces independently. The MD sees all three roles; HR can change a worker's role but cannot appoint another HR account.
+- **Roles follow the seniority ladder.** The picker shows all three roles horizontally from senior to junior: Managing Director → HR → Worker (on narrow screens, it stacks into one column). Roles at or above the signed-in user's level remain visible but locked; the server enforces that only lower-level roles can be assigned. The MD can assign HR or Worker, while HR can assign Worker only.
 - **Access preview.** Selecting a role shows its description, level, scope and the capabilities it grants (payroll, leave approval, attendance review) before the change is saved.
-- **Suggestions, not guesses.** The employee ID has a generator (`NIL-YY-NNNN`), the supervisor defaults to the most senior person in the chosen department, and designation suggestions are filtered to that department's titles.
+- **Role and designation stay aligned.** Choosing Managing Director, HR or Worker updates the designation to Managing Director, Human Resource Manager or Worker, respectively. Department/team remains a separate placement choice.
+- **Suggestions, not guesses.** The employee ID has a generator (`NIL-YY-NNNN`), and the supervisor defaults to the most senior person in the chosen department.
 
 ## Recent workspace and attendance updates
 

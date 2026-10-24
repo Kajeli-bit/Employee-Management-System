@@ -7,67 +7,73 @@ import EmployeeForm from "./EmployeeForm";
 import { fetchDepartments } from "../../utils/EmployeeHelper";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
-import { resolveRole } from "../../utils/roles";
+import {
+  designationForRole,
+  resolveRole,
+} from "../../utils/roles";
 
 const dateOnly = (value) => (value ? String(value).slice(0, 10) : "");
 const listToText = (value) => (Array.isArray(value) ? value.join(", ") : "");
 
-const toFormValues = (employee) => ({
-  employeeId: employee.employeeId || "",
-  dob: dateOnly(employee.dob),
-  gender: employee.gender || "",
-  maritalStatus: employee.maritalStatus || "",
-  designation: employee.designation || "",
-  department: employee.department?._id || "",
-  salary: employee.salary ?? "",
-  // Legacy keys (admin, hr, tl) are shown as the role they map to.
-  role: resolveRole(employee.userId?.role) || "employee",
-  reportsTo:
-    employee.userId?.reportsTo?._id || employee.userId?.reportsTo || "",
-  employmentType: employee.employmentType || "Full-time",
-  employmentStatus: employee.employmentStatus || "Active",
-  workMode: employee.workMode || "Office",
-  workLocation: employee.workLocation?._id || "",
-  dateOfJoining: dateOnly(employee.dateOfJoining),
-  contractEndDate: dateOnly(employee.contractEndDate),
-  probationEndDate: dateOnly(employee.probationEndDate),
-  phone: employee.phone || "",
-  personalEmail: employee.personalEmail || "",
-  address: employee.address || "",
-  city: employee.city || "",
-  region: employee.region || "",
-  nationalId: employee.nationalId || "",
-  tin: employee.tin || "",
-  nssfNumber: employee.nssfNumber || "",
-  nhifNumber: employee.nhifNumber || "",
-  bankName: employee.bankName || "",
-  bankBranch: employee.bankBranch || "",
-  bankAccountName: employee.bankAccountName || "",
-  bankAccountNumber: employee.bankAccountNumber || "",
-  drivingLicenceNumber: employee.drivingLicenceNumber || "",
-  passportNumber: employee.passportNumber || "",
-  workPermitExpiry: dateOnly(employee.workPermitExpiry),
-  qualification: employee.qualification || "",
-  fieldOfStudy: employee.fieldOfStudy || "",
-  certifications: listToText(employee.certifications),
-  skills: listToText(employee.skills),
-  notes: employee.notes || "",
-  "emergencyContact.name": employee.emergencyContact?.name || "",
-  "emergencyContact.relationship":
-    employee.emergencyContact?.relationship || "",
-  "emergencyContact.phone": employee.emergencyContact?.phone || "",
-});
+const toFormValues = (employee) => {
+  // Legacy keys are normalized to one of the three active roles.
+  const role = resolveRole(employee.userId?.role) || "worker";
+
+  return {
+    employeeId: employee.employeeId || "",
+    dob: dateOnly(employee.dob),
+    gender: employee.gender || "",
+    maritalStatus: employee.maritalStatus || "",
+    designation: designationForRole(role),
+    department: employee.department?._id || "",
+    salary: employee.salary ?? "",
+    role,
+    reportsTo:
+      employee.userId?.reportsTo?._id || employee.userId?.reportsTo || "",
+    employmentType: employee.employmentType || "Full-time",
+    employmentStatus: employee.employmentStatus || "Active",
+    workMode: employee.workMode || "Office",
+    workLocation: employee.workLocation?._id || "",
+    dateOfJoining: dateOnly(employee.dateOfJoining),
+    contractEndDate: dateOnly(employee.contractEndDate),
+    probationEndDate: dateOnly(employee.probationEndDate),
+    phone: employee.phone || "",
+    personalEmail: employee.personalEmail || "",
+    address: employee.address || "",
+    city: employee.city || "",
+    region: employee.region || "",
+    nationalId: employee.nationalId || "",
+    tin: employee.tin || "",
+    nssfNumber: employee.nssfNumber || "",
+    nhifNumber: employee.nhifNumber || "",
+    bankName: employee.bankName || "",
+    bankBranch: employee.bankBranch || "",
+    bankAccountName: employee.bankAccountName || "",
+    bankAccountNumber: employee.bankAccountNumber || "",
+    drivingLicenceNumber: employee.drivingLicenceNumber || "",
+    passportNumber: employee.passportNumber || "",
+    workPermitExpiry: dateOnly(employee.workPermitExpiry),
+    qualification: employee.qualification || "",
+    fieldOfStudy: employee.fieldOfStudy || "",
+    certifications: listToText(employee.certifications),
+    skills: listToText(employee.skills),
+    notes: employee.notes || "",
+    "emergencyContact.name": employee.emergencyContact?.name || "",
+    "emergencyContact.relationship":
+      employee.emergencyContact?.relationship || "",
+    "emergencyContact.phone": employee.emergencyContact?.phone || "",
+  };
+};
 
 const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
   const navigate = useNavigate();
   const { id: routeId } = useParams();
   const id = employeeId ?? routeId;
-  const { getToken } = useAuth();
+  const { user, getToken } = useAuth();
 
   const [initial, setInitial] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
-  const [jobTitles, setJobTitles] = useState([]);
   const [locations, setLocations] = useState([]);
   const [roleCatalog, setRoleCatalog] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -111,7 +117,6 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
 
         setDepartments(departmentData);
         setSupervisors(supervisorResponse.data.supervisors || []);
-        setJobTitles(structure.data.jobTitles || []);
         setRoleCatalog(structure.data.roles || []);
         setLocations(locationResponse.data.locations || []);
       } catch (error) {
@@ -191,9 +196,9 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
         initial={initial}
         departments={departments}
         supervisors={supervisors}
-        jobTitles={jobTitles}
         locations={locations}
         roleCatalog={roleCatalog}
+        currentUserRole={user?.role}
         submitting={submitting}
         successMessage={successMessage}
         onSubmit={handleSubmit}

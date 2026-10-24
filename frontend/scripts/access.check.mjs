@@ -71,8 +71,12 @@ try {
   // Sidebars
   const admin = render(React.createElement(AdminSidebar), "hr");
   check(
-    "HR console exposes people, payroll and approvals",
-    ["Employees", "Leave requests", "Team attendance", "Salary", "Work locations", "Departments"].every((label) => admin.includes(label))
+    "HR console exposes people, leave approvals and attendance",
+    ["Employees", "Leave requests", "Team attendance", "Work locations", "Departments"].every((label) => admin.includes(label))
+  );
+  check(
+    "the management sidebar does not link to Salary",
+    !admin.includes("Salary") && !admin.includes("/admin-dashboard/salary")
   );
   check(
     "the console has a My workspace group with every personal page",
