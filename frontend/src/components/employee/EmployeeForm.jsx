@@ -239,11 +239,13 @@ const SummaryRow = ({ label, value }) => (
 
 const EmployeeForm = ({
   initial = {},
+  mode = "edit",
   departments = [],
   supervisors = [],
   locations = [],
   roleCatalog = [],
   currentUserRole,
+  canEditRole = true,
   submitting,
   successMessage,
   onSubmit,
@@ -464,6 +466,17 @@ const EmployeeForm = ({
       title="Identity"
       description="How to reach this person. Their name, email and login were set when the account was created."
     >
+        {mode === "edit" && (
+          <Field label="Work email">
+            <input
+              value={form.email}
+              readOnly
+              aria-readonly="true"
+              className={`${inputClass} cursor-not-allowed bg-slate-50 text-slate-500`}
+            />
+          </Field>
+      )}
+
       <Field
         label="Phone number"
         hint="Used to reach the worker on site."
@@ -571,12 +584,21 @@ const EmployeeForm = ({
           </p>
         </div>
 
-        <RolePicker
-          roles={roles}
-          value={form.role}
-          actorRole={currentUserRole}
-          onSelect={chooseRole}
-        />
+        {canEditRole ? (
+          <RolePicker
+            roles={roles}
+            value={form.role}
+            actorRole={currentUserRole}
+            onSelect={chooseRole}
+          />
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-sm font-semibold text-slate-800">{selectedRole?.label || "Worker"}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Your level does not allow changing this employee’s role.
+            </p>
+          </div>
+        )}
 
         <div className="mt-3">
           <RoleAccess role={selectedRole} />
@@ -789,7 +811,10 @@ const EmployeeForm = ({
   const contactsFields = (
     <>
       <Section title="How do we reach them?">
-        <Field label="Personal email">
+        <Field
+          label="Personal email"
+          hint="The employee must verify this address from Login Settings before it works for sign-in."
+        >
           <input
             name="personalEmail"
             type="email"

@@ -145,6 +145,7 @@ try {
   const onboardingFields = [
     "name",
     "email",
+    "personalEmail",
     "phone",
   ];
   const droppedFields = [
@@ -160,7 +161,7 @@ try {
     "workLocation",
   ];
 
-  check("the add form has exactly three inputs", inputNames.length === 3);
+  check("the add form has exactly four inputs", inputNames.length === 4);
   check(
     "the add form asks for full name, work email and phone",
     onboardingFields.every((name) => inputNames.includes(name))
@@ -170,8 +171,9 @@ try {
     droppedFields.every((name) => !inputNames.includes(name))
   );
   check(
-    "all three add fields are required",
-    (onboard.match(/required=""/g) || []).length === 3
+    "only name, work email and phone are required",
+    (onboard.match(/required=""/g) || []).length === 3 &&
+      /name="personalEmail"[^>]*required/.test(onboard) === false
   );
   check(
     "the add form says the staff ID and username are generated",

@@ -6,7 +6,7 @@ const digitsIn = (value) => String(value ?? "").replace(/\D/g, "");
 
 // The same rules the server applies in utils/employeeProfile.js, so a typo is
 // caught before a Clerk login is created.
-export const validateWorker = ({ name, email, phone }) => {
+export const validateWorker = ({ name, email, personalEmail, phone }) => {
   const errors = {};
 
   if (!String(name ?? "").trim()) {
@@ -15,6 +15,23 @@ export const validateWorker = ({ name, email, phone }) => {
 
   if (!emailPattern.test(String(email ?? "").trim())) {
     errors.email = "Enter a valid work email, like amina@nilric.co.tz.";
+  }
+
+  const normalizedWorkEmail = String(email ?? "").trim().toLowerCase();
+  const normalizedPersonalEmail = String(personalEmail ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    normalizedPersonalEmail &&
+    !emailPattern.test(normalizedPersonalEmail)
+  ) {
+    errors.personalEmail = "Enter a valid personal email, like amina@gmail.com.";
+  } else if (
+    normalizedPersonalEmail &&
+    normalizedPersonalEmail === normalizedWorkEmail
+  ) {
+    errors.personalEmail = "Use an address different from the work email.";
   }
 
   if (digitsIn(phone).length < 7) {

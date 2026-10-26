@@ -8,6 +8,7 @@ import { fetchDepartments } from "../../utils/EmployeeHelper";
 import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 import {
+  canManageRole,
   designationForRole,
   resolveRole,
 } from "../../utils/roles";
@@ -20,6 +21,8 @@ const toFormValues = (employee) => {
   const role = resolveRole(employee.userId?.role) || "worker";
 
   return {
+    name: employee.userId?.name || "",
+    email: employee.userId?.email || "",
     employeeId: employee.employeeId || "",
     dob: dateOnly(employee.dob),
     gender: employee.gender || "",
@@ -38,7 +41,8 @@ const toFormValues = (employee) => {
     contractEndDate: dateOnly(employee.contractEndDate),
     probationEndDate: dateOnly(employee.probationEndDate),
     phone: employee.phone || "",
-    personalEmail: employee.personalEmail || "",
+    personalEmail:
+      employee.personalEmail || employee.userId?.personalEmail || "",
     address: employee.address || "",
     city: employee.city || "",
     region: employee.region || "",
@@ -153,6 +157,7 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
       // Sent even when empty so a home site can be cleared, unlike the other
       // optional text fields.
       formData.set("workLocation", values.workLocation || "");
+      formData.set("personalEmail", values.personalEmail || "");
 
       const response = await axios.put(
         `${API_URL}/api/employee/${id}`,
@@ -193,12 +198,14 @@ const Edit = ({ employeeId, onSuccess, onCancel, bare = false } = {}) => {
   return (
     <div className="pb-8">
       <EmployeeForm
+        mode="edit"
         initial={initial}
         departments={departments}
         supervisors={supervisors}
         locations={locations}
         roleCatalog={roleCatalog}
         currentUserRole={user?.role}
+        canEditRole={canManageRole(user?.role, initial.role)}
         submitting={submitting}
         successMessage={successMessage}
         onSubmit={handleSubmit}

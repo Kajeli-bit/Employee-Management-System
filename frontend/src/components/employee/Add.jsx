@@ -47,7 +47,11 @@ const Add = ({ onSuccess, onCancel, bare = false } = {}) => {
             response.data.employeeId
               ? ` as ${response.data.employeeId}`
               : ""
-          }. They can sign in with ${response.data.employeeEmail} and an email code.`
+          }. They can sign in with ${response.data.employeeEmail} and an email code.${
+            response.data.personalEmailVerificationRequired
+              ? ` After verifying ${response.data.personalEmail}, they can use that address too.`
+              : ""
+          }`
         );
 
         setTimeout(() => {

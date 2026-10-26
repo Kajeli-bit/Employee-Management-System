@@ -177,7 +177,23 @@ export const addEmployee = async (req, res, options = {}) => {
 
   let clerkUserId = null;
   let clerkUserWasCreated = false;
+  let clerkPersonalEmailAddressId = null;
+  let personalEmailNeedsVerification = false;
   let profileImagePublicId = "";
+
+  const rollbackClerkChanges = async () => {
+    try {
+      if (clerkUserWasCreated && clerkUserId) {
+        await clerk.users.deleteUser(clerkUserId);
+      } else if (clerkPersonalEmailAddressId) {
+        await clerk.emailAddresses.deleteEmailAddress(
+          clerkPersonalEmailAddressId
+        );
+      }
+    } catch (rollbackError) {
+      console.log("CLERK EMPLOYEE ROLLBACK ERROR:", rollbackError);
+    }
+  };
 
   try {
     if (!hasCapability(req.user.role, CAPABILITIES.PEOPLE_MANAGE)) {
@@ -309,9 +325,36 @@ export const addEmployee = async (req, res, options = {}) => {
     }
 
     const employeeEmail = email.trim().toLowerCase();
+    const personalEmail = String(req.body.personalEmail || "")
+      .trim()
+      .toLowerCase();
+    profile.personalEmail = personalEmail || undefined;
+
+    if (personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail)) {
+      return res.status(400).json({
+        success: false,
+        error: "Enter a valid personal email address",
+      });
+    }
+
+    if (personalEmail && personalEmail === employeeEmail) {
+      return res.status(400).json({
+        success: false,
+        error: "Personal email must be different from work email",
+      });
+    }
+
+    const existingUserEmailQuery = [{ email: employeeEmail }];
+
+    if (personalEmail) {
+      existingUserEmailQuery.push(
+        { email: personalEmail },
+        { personalEmail }
+      );
+    }
 
     const userExists = await User.findOne({
-      email: employeeEmail,
+      $or: existingUserEmailQuery,
     });
 
     if (userExists) {
@@ -401,8 +444,7 @@ export const addEmployee = async (req, res, options = {}) => {
         });
 
       if (existingClerkUsers.data.length > 0) {
-        const existingClerkUser =
-          existingClerkUsers.data[0];
+        const existingClerkUser = existingClerkUsers.data[0];
 
         clerkUserId = existingClerkUser.id;
         clerkUserWasCreated = false;
@@ -429,7 +471,48 @@ export const addEmployee = async (req, res, options = {}) => {
           employeeEmail
         );
       }
+
+      if (personalEmail) {
+        const personalEmailOwner = await clerk.users.getUserList({
+          emailAddress: [personalEmail],
+        });
+        const belongsToAnotherClerkUser = personalEmailOwner.data.some(
+          (candidate) => candidate.id !== clerkUserId
+        );
+
+        if (belongsToAnotherClerkUser) {
+          await rollbackClerkChanges();
+          clerkUserId = null;
+          clerkUserWasCreated = false;
+
+          return res.status(409).json({
+            success: false,
+            error: "Personal email is already linked to another login account",
+          });
+        }
+
+        const clerkUser = await clerk.users.getUser(clerkUserId);
+        const attachedAddress = clerkUser.emailAddresses?.find(
+          (address) => address.emailAddress?.trim().toLowerCase() === personalEmail
+        );
+
+        if (attachedAddress?.verification?.status === "verified") {
+          personalEmailNeedsVerification = false;
+        } else if (!attachedAddress) {
+          personalEmailNeedsVerification = true;
+          const personalAddress = await clerk.emailAddresses.createEmailAddress({
+            userId: clerkUserId,
+            emailAddress: personalEmail,
+            primary: false,
+            verified: false,
+          });
+          clerkPersonalEmailAddressId = personalAddress.id;
+        } else {
+          personalEmailNeedsVerification = true;
+        }
+      }
     } catch (clerkError) {
+      await rollbackClerkChanges();
       console.log(
         "CLERK EMPLOYEE CREATE/LOOKUP ERROR:",
         clerkError
@@ -464,21 +547,7 @@ export const addEmployee = async (req, res, options = {}) => {
           cloudinaryError
         );
 
-        if (
-          clerkUserId &&
-          clerkUserWasCreated
-        ) {
-          try {
-            await clerk.users.deleteUser(
-              clerkUserId
-            );
-          } catch (deleteError) {
-            console.log(
-              "CLERK ROLLBACK DELETE ERROR:",
-              deleteError
-            );
-          }
-        }
+        await rollbackClerkChanges();
 
         return res.status(500).json({
           success: false,
@@ -498,6 +567,8 @@ export const addEmployee = async (req, res, options = {}) => {
       username: finalUsername,
 
       email: employeeEmail,
+
+      personalEmail,
 
       role: requestedRole,
 
@@ -532,21 +603,7 @@ export const addEmployee = async (req, res, options = {}) => {
         );
       }
 
-      if (
-        clerkUserId &&
-        clerkUserWasCreated
-      ) {
-        try {
-          await clerk.users.deleteUser(
-            clerkUserId
-          );
-        } catch (deleteError) {
-          console.log(
-            "CLERK ROLLBACK DELETE ERROR:",
-            deleteError
-          );
-        }
-      }
+      await rollbackClerkChanges();
 
       throw userError;
     }
@@ -595,21 +652,7 @@ export const addEmployee = async (req, res, options = {}) => {
         );
       }
 
-      if (
-        clerkUserId &&
-        clerkUserWasCreated
-      ) {
-        try {
-          await clerk.users.deleteUser(
-            clerkUserId
-          );
-        } catch (deleteError) {
-          console.log(
-            "CLERK ROLLBACK DELETE ERROR:",
-            deleteError
-          );
-        }
-      }
+      await rollbackClerkChanges();
 
       throw employeeError;
     }
@@ -619,6 +662,8 @@ export const addEmployee = async (req, res, options = {}) => {
       message:
         "User created successfully. User can login using the registered email and OTP.",
       employeeEmail,
+      personalEmail,
+      personalEmailVerificationRequired: personalEmailNeedsVerification,
       employeeId: finalEmployeeId,
       username: finalUsername,
       role: requestedRole,
@@ -816,6 +861,9 @@ export const getEmployees = async (req, res) => {
             emp.userId?.email ||
             "N/A",
 
+          personalEmail:
+            emp.personalEmail || emp.userId?.personalEmail || "",
+
           username:
             emp.userId?.username ||
             "",
@@ -986,6 +1034,8 @@ export const updateEmployee = async (
   req,
   res
 ) => {
+  let newlyAddedClerkEmailId = null;
+
   try {
     const { id } = req.params;
 
@@ -1002,6 +1052,13 @@ export const updateEmployee = async (
     } = req.body;
 
     const profile = readProfileFields(req.body);
+    const personalEmailWasSubmitted = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "personalEmail"
+    );
+    const requestedPersonalEmail = personalEmailWasSubmitted
+      ? String(req.body.personalEmail || "").trim().toLowerCase()
+      : undefined;
 
     const employee =
       await Employee.findOne({
@@ -1157,6 +1214,100 @@ export const updateEmployee = async (
       });
     }
 
+    if (personalEmailWasSubmitted) {
+      if (
+        requestedPersonalEmail &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedPersonalEmail)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Enter a valid personal email address",
+        });
+      }
+
+      if (
+        requestedPersonalEmail &&
+        requestedPersonalEmail === employee.userId.email.trim().toLowerCase()
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Personal email must be different from work email",
+        });
+      }
+
+      if (requestedPersonalEmail) {
+        const [emailOwner, employeeEmailOwner] = await Promise.all([
+          User.findOne({
+            _id: { $ne: employee.userId._id },
+            $or: [
+              { email: requestedPersonalEmail },
+              { personalEmail: requestedPersonalEmail },
+            ],
+          }).select("_id"),
+          Employee.findOne({
+            userId: { $ne: employee.userId._id },
+            personalEmail: requestedPersonalEmail,
+          }).select("_id"),
+        ]);
+
+        if (emailOwner || employeeEmailOwner) {
+          return res.status(409).json({
+            success: false,
+            error: "This email is already assigned to another account",
+          });
+        }
+      }
+
+      const currentPersonalEmail = String(
+        employee.userId.personalEmail || employee.personalEmail || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      if (requestedPersonalEmail !== currentPersonalEmail && requestedPersonalEmail) {
+        if (!employee.userId.clerkUserId) {
+          return res.status(409).json({
+            success: false,
+            error: "This account has no Clerk login to attach the personal email to",
+          });
+        }
+
+        const matchingClerkUsers = await clerkClient.users.getUserList({
+          emailAddress: [requestedPersonalEmail],
+        });
+        const otherClerkOwner = matchingClerkUsers.data.some(
+          (candidate) => candidate.id !== employee.userId.clerkUserId
+        );
+
+        if (otherClerkOwner) {
+          return res.status(409).json({
+            success: false,
+            error: "This email is already linked to another login account",
+          });
+        }
+
+        const clerkUser = await clerkClient.users.getUser(
+          employee.userId.clerkUserId
+        );
+        const existingClerkEmail = clerkUser.emailAddresses?.find(
+          (address) =>
+            address.emailAddress?.trim().toLowerCase() === requestedPersonalEmail
+        );
+
+        if (!existingClerkEmail) {
+          const addedEmail = await clerkClient.emailAddresses.createEmailAddress({
+            userId: employee.userId.clerkUserId,
+            emailAddress: requestedPersonalEmail,
+            primary: false,
+            verified: false,
+          });
+          newlyAddedClerkEmailId = addedEmail.id;
+        }
+      }
+
+      profile.personalEmail = requestedPersonalEmail || undefined;
+    }
+
     const canSetCompanyScope = canGrantCompanyScope(req.user);
     const requestedCompanyScope = asBoolean(req.body.companyScope, false);
 
@@ -1283,6 +1434,12 @@ export const updateEmployee = async (
         profileImagePublicId:
           newProfileImagePublicId,
 
+        ...(personalEmailWasSubmitted
+          ? requestedPersonalEmail
+            ? { personalEmail: requestedPersonalEmail }
+            : { $unset: { personalEmail: 1 } }
+          : {}),
+
         // Only leadership edits this flag, so a department manager saving the
         // form cannot silently drop a grant someone else made.
         ...(canSetCompanyScope && req.body.companyScope !== undefined
@@ -1293,6 +1450,40 @@ export const updateEmployee = async (
       }
     );
 
+    if (newlyAddedClerkEmailId) {
+      newlyAddedClerkEmailId = null;
+    }
+
+    const previousPersonalEmail = String(
+      employee.userId.personalEmail || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (
+      personalEmailWasSubmitted &&
+      previousPersonalEmail &&
+      previousPersonalEmail !== requestedPersonalEmail &&
+      employee.userId.clerkUserId
+    ) {
+      try {
+        const clerkUser = await clerkClient.users.getUser(
+          employee.userId.clerkUserId
+        );
+        const previousAddress = clerkUser.emailAddresses?.find(
+          (address) =>
+            address.emailAddress?.trim().toLowerCase() === previousPersonalEmail &&
+            address.id !== clerkUser.primaryEmailAddressId
+        );
+
+        if (previousAddress) {
+          await clerkClient.emailAddresses.deleteEmailAddress(previousAddress.id);
+        }
+      } catch (clerkError) {
+        console.log("OLD CLERK PERSONAL EMAIL CLEANUP ERROR:", clerkError);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message:
@@ -1301,6 +1492,16 @@ export const updateEmployee = async (
       role: updatedRole,
     });
   } catch (error) {
+    if (newlyAddedClerkEmailId) {
+      try {
+        await clerkClient.emailAddresses.deleteEmailAddress(
+          newlyAddedClerkEmailId
+        );
+      } catch (cleanupError) {
+        console.log("NEW CLERK PERSONAL EMAIL CLEANUP ERROR:", cleanupError);
+      }
+    }
+
     console.log(
       "UPDATE EMPLOYEE ERROR:",
       error
@@ -1554,7 +1755,7 @@ export const getEmployeeProfile = async (
 
         phone: employee.phone || "",
 
-        personalEmail: employee.personalEmail || "",
+        personalEmail: employee.personalEmail || employee.userId.personalEmail || "",
 
         address: employee.address || "",
 

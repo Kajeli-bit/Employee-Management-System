@@ -10,19 +10,20 @@ export const linkClerkUserByVerifiedEmail = async (
   clerkUser,
   UserModel = User
 ) => {
-  const primaryEmail = clerkUser?.emailAddresses?.find(
-    (address) => address.id === clerkUser.primaryEmailAddressId
+  const signInEmail = clerkUser?.emailAddresses?.find(
+    (address) =>
+      address.id === clerkUser.primaryEmailAddressId &&
+      address.verification?.status === "verified"
   );
 
-  if (
-    !primaryEmail ||
-    primaryEmail.verification?.status !== "verified"
-  ) {
+  if (!signInEmail) {
     return null;
   }
 
-  const email = primaryEmail.emailAddress.trim().toLowerCase();
-  const existingQuery = UserModel.findOne({ email });
+  const email = signInEmail.emailAddress.trim().toLowerCase();
+  const existingQuery = UserModel.findOne({
+    $or: [{ email }, { personalEmail: email }],
+  });
   const existingUser = await existingQuery.select("-password");
 
   if (!existingUser) {
@@ -36,9 +37,10 @@ export const linkClerkUserByVerifiedEmail = async (
   // Match the ID we just read so a simultaneous account change cannot be
   // overwritten. `$in: [null]` matches either a null or absent Clerk ID.
   const previousClerkUserId = existingUser.clerkUserId;
+
   const filter = {
     _id: existingUser._id,
-    email,
+    $or: [{ email }, { personalEmail: email }],
     clerkUserId:
       previousClerkUserId == null
         ? { $in: [null] }

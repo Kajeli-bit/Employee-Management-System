@@ -20,7 +20,16 @@ const FIELDS = [
     type: "email",
     autoComplete: "email",
     placeholder: "amina@nilric.co.tz",
-    hint: "Their sign-in address. They get a one-time code here.",
+    hint: "Their first sign-in address. They get a one-time code here.",
+  },
+  {
+    name: "personalEmail",
+    label: "Personal email",
+    type: "email",
+    autoComplete: "email",
+    placeholder: "amina@gmail.com",
+    hint: "Optional. They can also sign in here after verifying they own it.",
+    optional: true,
   },
   {
     name: "phone",
@@ -37,7 +46,7 @@ const FIELDS = [
 const FACTS = [
   {
     term: "Sign-in",
-    detail: "Their work email, plus a one-time code.",
+    detail: "Work email works first. Personal email works after they verify it.",
   },
   {
     term: "Generated",
@@ -56,7 +65,12 @@ const OnboardForm = ({
   successMessage,
   bare = false,
 }) => {
-  const [values, setValues] = useState({ name: "", email: "", phone: "" });
+  const [values, setValues] = useState({
+    name: "",
+    email: "",
+    personalEmail: "",
+    phone: "",
+  });
   const [errors, setErrors] = useState({});
   const nameRef = useRef(null);
 
@@ -94,6 +108,7 @@ const OnboardForm = ({
     onSubmit({
       name: values.name.trim(),
       email: values.email.trim(),
+      personalEmail: values.personalEmail.trim(),
       phone: values.phone.trim(),
     });
   };
@@ -182,7 +197,7 @@ const OnboardForm = ({
                     type={field.type}
                     value={values[field.name]}
                     onChange={change}
-                    required
+                    required={!field.optional}
                     ref={index === 0 ? nameRef : undefined}
                     autoComplete={field.autoComplete}
                     placeholder={field.placeholder}

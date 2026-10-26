@@ -23,6 +23,24 @@ const Setting = () => {
 
   const [pendingEmailAddress, setPendingEmailAddress] =
     useState(null);
+  const [personalOtp, setPersonalOtp] = useState("");
+  const [personalVerificationStep, setPersonalVerificationStep] = useState("ready");
+  const [personalMessage, setPersonalMessage] = useState("");
+  const [personalError, setPersonalError] = useState("");
+  const [personalLoading, setPersonalLoading] = useState(false);
+
+  const { user: emsUser } = useAuth();
+  const personalEmail = emsUser?.personalEmail || "";
+  const linkedPersonalEmail = user?.emailAddresses?.find(
+    (address) =>
+      address.emailAddress?.trim().toLowerCase() ===
+      personalEmail.trim().toLowerCase()
+  );
+  const pendingPersonalEmailAddress = linkedPersonalEmail?.verification?.status === "verified"
+    ? null
+    : linkedPersonalEmail;
+  const personalEmailVerified =
+    linkedPersonalEmail?.verification?.status === "verified";
 
   const currentEmail =
     user?.primaryEmailAddress?.emailAddress || "";
@@ -197,6 +215,74 @@ const Setting = () => {
     setError("");
   };
 
+  const sendPersonalEmailCode = async () => {
+    setPersonalMessage("");
+    setPersonalError("");
+
+    if (!linkedPersonalEmail || !pendingPersonalEmailAddress) {
+      setPersonalError(
+        "This email is not attached to your sign-in account yet. Ask HR to update your employee record."
+      );
+      return;
+    }
+
+    try {
+      setPersonalLoading(true);
+      await pendingPersonalEmailAddress.prepareVerification({ strategy: "email_code" });
+      setPersonalVerificationStep("code");
+      setPersonalMessage(`A verification code was sent to ${personalEmail}.`);
+    } catch (err) {
+      setPersonalError(
+        err?.errors?.[0]?.message ||
+          "Unable to send a verification code. Try again shortly."
+      );
+    } finally {
+      setPersonalLoading(false);
+    }
+  };
+
+  const verifyPersonalEmail = async (event) => {
+    event.preventDefault();
+    setPersonalMessage("");
+    setPersonalError("");
+
+    if (!linkedPersonalEmail || !personalOtp.trim()) {
+      setPersonalError("Enter the verification code sent to your personal email.");
+      return;
+    }
+
+    try {
+      setPersonalLoading(true);
+      const result = await pendingPersonalEmailAddress.attemptVerification({
+        strategy: "email_code",
+        code: personalOtp.trim(),
+      });
+
+      if (result?.verification?.status !== "verified") {
+        setPersonalError("That code did not verify the email. Check it and try again.");
+        return;
+      }
+
+      await user.reload();
+      setPersonalOtp("");
+      setPersonalVerificationStep("ready");
+      setPersonalMessage("Personal email verified. It can now be used to sign in.");
+    } catch (err) {
+      setPersonalError(
+        err?.errors?.[0]?.message || "That code is invalid or has expired."
+      );
+    } finally {
+      setPersonalLoading(false);
+    }
+  };
+
+  const returnToPersonalEmail = () => {
+    setPersonalVerificationStep("ready");
+    setPersonalOtp("");
+    setPersonalMessage("");
+    setPersonalError("");
+  };
+
   return (
     <div
       className={
@@ -238,6 +324,67 @@ const Setting = () => {
               {currentEmail || "Not available"}
             </p>
           </div>
+
+          <section className="mb-5 rounded-lg border border-gray-200 p-4">
+            <h2 className="text-sm font-semibold text-gray-800">Personal sign-in email</h2>
+            <p className="mt-1 break-all text-sm text-gray-600">
+              {personalEmail || "No personal email has been added to your employee record."}
+            </p>
+            {personalEmail && (
+              <>
+                <p className="mt-1 text-xs font-medium text-gray-500">
+                  {personalEmailVerified
+                    ? "Verified · available as a sign-in email"
+                    : "Not verified · work email remains available for sign-in"}
+                </p>
+                {personalMessage && (
+                  <p role="status" className="mt-3 rounded-md bg-emerald-50 p-2 text-xs text-emerald-800">
+                    {personalMessage}
+                  </p>
+                )}
+                {personalError && (
+                  <p role="alert" className="mt-3 rounded-md bg-rose-50 p-2 text-xs text-rose-700">
+                    {personalError}
+                  </p>
+                )}
+                {!personalEmailVerified && personalVerificationStep === "ready" && (
+                  <button
+                    type="button"
+                    onClick={sendPersonalEmailCode}
+                    disabled={personalLoading}
+                    className="mt-3 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  >
+                    {personalLoading ? "Sending code…" : "Verify personal email"}
+                  </button>
+                )}
+                {!personalEmailVerified && personalVerificationStep === "code" && (
+                  <form onSubmit={verifyPersonalEmail} className="mt-3 space-y-3">
+                    <label htmlFor="personal-email-code" className="block text-sm font-medium text-gray-700">
+                      Code sent to {personalEmail}
+                      <input
+                        id="personal-email-code"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={personalOtp}
+                        onChange={(event) => setPersonalOtp(event.target.value.replace(/[^0-9]/g, ""))}
+                        required
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                    </label>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={personalLoading} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-gray-400">
+                        {personalLoading ? "Checking…" : "Confirm email"}
+                      </button>
+                      <button type="button" onClick={returnToPersonalEmail} disabled={personalLoading} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+          </section>
 
           {step === "email" && (
             <form onSubmit={sendOtp} className="space-y-4">

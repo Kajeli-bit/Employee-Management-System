@@ -19,18 +19,54 @@ import Employee from "../models/Employee.js";
 // Only Clerk is doubled. The controller, Mongoose models and a real in-memory
 // database all run as they do in production.
 const makeClerk = () => {
-  const state = { created: null };
+  const state = { created: null, emailAddresses: [] };
+  const users = new Map();
 
   return {
     state,
     users: {
-      getUserList: async () => ({ data: [] }),
+      getUserList: async ({ emailAddress = [] } = {}) => ({
+        data: [...users.values()].filter((candidate) =>
+          candidate.emailAddresses.some((address) =>
+            emailAddress.some(
+              (email) => email.toLowerCase() === address.emailAddress.toLowerCase()
+            )
+          )
+        ),
+      }),
       createUser: async (params) => {
         state.created = params;
-
-        return { id: `clerk_test_${params.emailAddress[0].split("@")[0]}` };
+        const id = `clerk_test_${params.emailAddress[0].split("@")[0]}`;
+        const emailAddresses = params.emailAddress.map((emailAddress, index) => ({
+          id: `${id}_email_${index}`,
+          emailAddress,
+          verification: { status: "unverified" },
+        }));
+        const created = {
+          id,
+          primaryEmailAddressId: emailAddresses[0]?.id,
+          emailAddresses,
+        };
+        users.set(id, created);
+        return created;
       },
-      deleteUser: async () => ({}),
+      getUser: async (id) => users.get(id),
+      deleteUser: async (id) => users.delete(id),
+    },
+    emailAddresses: {
+      createEmailAddress: async ({ userId, emailAddress }) => {
+        const address = {
+          id: `${userId}_email_${users.get(userId).emailAddresses.length}`,
+          emailAddress,
+          verification: { status: "unverified" },
+        };
+        users.get(userId).emailAddresses.push(address);
+        state.emailAddresses.push(address);
+        return address;
+      },
+      deleteEmailAddress: async (id) => {
+        state.emailAddresses = state.emailAddresses.filter((address) => address.id !== id);
+      },
     },
   };
 };
@@ -100,6 +136,61 @@ test("name, work email and phone are enough to add a worker", async () => {
   assert.equal(res.body.employeeId, employee.employeeId);
 });
 
+test("an optional personal email is attached as an unverified secondary login", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Amina Juma",
+      email: "amina@nilric.co.tz",
+      personalEmail: " Amina@gmail.com ",
+      phone: "+255 712 345 678",
+    },
+  });
+
+  assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+  assert.equal(res.body.personalEmail, "amina@gmail.com");
+  assert.equal(res.body.personalEmailVerificationRequired, true);
+
+  const user = await User.findOne({ email: "amina@nilric.co.tz" });
+  assert.equal(user.personalEmail, "amina@gmail.com");
+  assert.equal(clerk.state.emailAddresses[0].emailAddress, "amina@gmail.com");
+  assert.equal(clerk.state.emailAddresses[0].verification.status, "unverified");
+});
+
+test("rejects a personal email already assigned to another EMS account", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+  await User.create({
+    name: "Existing User",
+    username: "existing.user",
+    email: "existing@nilric.co.tz",
+    personalEmail: "shared@gmail.com",
+    companyId: company._id,
+    role: "worker",
+  });
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Amina Juma",
+      email: "amina@nilric.co.tz",
+      personalEmail: "shared@gmail.com",
+      phone: "+255 712 345 678",
+    },
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(clerk.state.created, null);
+  assert.equal(await User.countDocuments({ email: "amina@nilric.co.tz" }), 0);
+});
+
 test("a generated username does not collide with an existing one", async () => {
   const { company, finance, head } = await seedOrganisation();
   const actor = await hrActor(company._id, finance._id, head._id);
@@ -154,6 +245,27 @@ test("a username and staff ID typed by HR are kept", async () => {
 
   assert.equal(user.username, "amina.j");
   assert.equal(employee.employeeId, "NIL-26-7777");
+});
+
+test("rejects a personal email that matches the work email", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const actor = await hrActor(company._id, finance._id, head._id);
+  const clerk = makeClerk();
+
+  const res = await add({
+    actor,
+    clerk,
+    body: {
+      name: "Amina Juma",
+      email: "amina@nilric.co.tz",
+      personalEmail: "AMINA@NILRIC.CO.TZ",
+      phone: "0712345678",
+    },
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(clerk.state.created, null);
+  assert.equal(await User.countDocuments({ email: "amina@nilric.co.tz" }), 0);
 });
 
 test("the phone number is required and nothing is saved without it", async () => {

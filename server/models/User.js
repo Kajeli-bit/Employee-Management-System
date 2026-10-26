@@ -40,6 +40,12 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
 
+  personalEmail: {
+    type: String,
+    lowercase: true,
+    trim: true,
+  },
+
   password: {
     type: String,
     required: false,
@@ -104,6 +110,14 @@ const userSchema = new mongoose.Schema({
   },
 });
 
+userSchema.index(
+  { personalEmail: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { personalEmail: { $type: "string" } },
+  }
+);
 userSchema.index({ companyId: 1, role: 1 });
 userSchema.index({ companyId: 1, reportsTo: 1 });
 
