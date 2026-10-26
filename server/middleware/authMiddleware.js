@@ -1,13 +1,16 @@
 import { clerkClient, getAuth } from "@clerk/express";
 import User from "../models/User.js";
 
-// Links a Clerk login to an existing EMS record that was created by email (for
-// example by the Managing Director) and has no Clerk ID yet. Only a verified
-// primary email can link, and an already-linked record is never reassigned.
-const linkClerkUserByEmail = async (clerkUserId) => {
-  const clerkUser = await clerkClient.users.getUser(clerkUserId);
-
-  const primaryEmail = clerkUser.emailAddresses.find(
+// Connect an authenticated Clerk identity to an existing EMS account using
+// the verified primary email. The Clerk ID can differ between the local
+// development instance and production, especially for records copied from
+// `test` into `ems`.
+export const linkClerkUserByVerifiedEmail = async (
+  clerkUserId,
+  clerkUser,
+  UserModel = User
+) => {
+  const primaryEmail = clerkUser?.emailAddresses?.find(
     (address) => address.id === clerkUser.primaryEmailAddressId
   );
 
@@ -18,16 +21,48 @@ const linkClerkUserByEmail = async (clerkUserId) => {
     return null;
   }
 
-  const user = await User.findOneAndUpdate(
-    {
-      email: primaryEmail.emailAddress.trim().toLowerCase(),
-      clerkUserId: null,
-    },
+  const email = primaryEmail.emailAddress.trim().toLowerCase();
+  const existingQuery = UserModel.findOne({ email });
+  const existingUser = await existingQuery.select("-password");
+
+  if (!existingUser) {
+    return null;
+  }
+
+  if (existingUser.clerkUserId === clerkUserId) {
+    return existingUser;
+  }
+
+  // Match the ID we just read so a simultaneous account change cannot be
+  // overwritten. `$in: [null]` matches either a null or absent Clerk ID.
+  const previousClerkUserId = existingUser.clerkUserId;
+  const filter = {
+    _id: existingUser._id,
+    email,
+    clerkUserId:
+      previousClerkUserId == null
+        ? { $in: [null] }
+        : previousClerkUserId,
+  };
+  const updateQuery = UserModel.findOneAndUpdate(
+    filter,
     { $set: { clerkUserId } },
     { new: true }
-  ).select("-password");
+  );
+  const linkedUser = await updateQuery.select("-password");
 
-  return user;
+  if (linkedUser) {
+    return linkedUser;
+  }
+
+  // Another request may have completed the same verified-email relink first.
+  const concurrentQuery = UserModel.findOne({ clerkUserId });
+  return concurrentQuery.select("-password");
+};
+
+const linkClerkUserByEmail = async (clerkUserId) => {
+  const clerkUser = await clerkClient.users.getUser(clerkUserId);
+  return linkClerkUserByVerifiedEmail(clerkUserId, clerkUser);
 };
 
 const verifyUser = async (req, res, next) => {
