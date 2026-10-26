@@ -215,10 +215,17 @@ cp .env.example .env   # then fill in the values
 npm start              # http://localhost:5000
 ```
 
+Database selection is pinned by the runtime, not inferred from the Atlas URI:
+local API processes connect to **`test`** and Vercel deployments connect to
+**`ems`**. Keep the same Atlas cluster URI in both environments; its path must
+not specify another database. The normal runtime cannot override this split.
+The migration command below is an explicit exception that reads from `test`
+and writes to `ems` only when run with `--apply`.
+
 `server/.env`:
 
 ```env
-ATLASDB_URL=mongodb+srv://...
+ATLASDB_URL=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/
 JWT_KEY=your_jwt_secret
 CLERK_PUBLISHABLE_KEY=pk_...
 CLERK_SECRET_KEY=sk_...
@@ -237,6 +244,15 @@ npm install
 cp .env.example .env
 npm run dev            # http://localhost:5173
 ```
+
+The localhost frontend calls the local API, which is pinned to the `test`
+database. In Vercel Project → Settings → Environment Variables, set
+`ATLASDB_URL` for **Production** to the Atlas URI used to reach the `ems`
+database (the app selects `ems` itself), and set production `CLIENT_URL` to
+the deployed app's exact origin. Do not use the production API URL or production
+database configuration in local frontend `.env` files. After changing Vercel
+environment variables, redeploy the production deployment for the new values to
+be applied.
 
 `frontend/.env`:
 
@@ -327,4 +343,5 @@ cd frontend && npm run lint         # currently reports pre-existing lint errors
 - Workspace isolation: workers are redirected away from `/admin-dashboard`, and every management endpoint checks a capability the worker role does not have.
 - HR cannot appoint or edit another HR account; only the Managing Director can. Neither the MD nor HR can edit their own employee record through the admin screens (profile editing is self-service).
 - GPS is a deterrent, not proof: a determined user can spoof coordinates. Add device binding, selfie verification or supervisor confirmation if attendance is used for payroll deductions. Require HTTPS in production — browsers block geolocation on insecure origins (except `localhost`).
-- Do not commit `.env` files, Clerk keys or Cloudinary secrets.
+- Do not commit `.env` files, Clerk keys or Cloudinary secrets. Restrict the Vercel production MongoDB user's network access and permissions to the production cluster/database as appropriate; never expose `ATLASDB_URL` to the frontend.
+- The application backend, role migration and organisation seeding default to `test` locally and always pin Vercel to `ems`. The explicit `migrate:test-to-ems -- --apply` command is the only supported cross-database path.

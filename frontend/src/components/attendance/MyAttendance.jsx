@@ -218,9 +218,15 @@ const MyAttendance = () => {
   }, [getToken]);
 
   useEffect(() => {
-    if (getToken) {
-      load();
+    if (!getToken) {
+      return undefined;
     }
+
+    const timer = setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [getToken, load]);
 
   // The server can close a day from the scheduled sweep while this page stays

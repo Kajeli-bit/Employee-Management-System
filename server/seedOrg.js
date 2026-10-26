@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import mongoose from "mongoose";
 
+import { databaseNameForRuntime } from "./db/databaseName.js";
 import Company from "./models/Company.js";
 import {
   seedCompanyDefaults,
@@ -21,7 +22,9 @@ const run = async () => {
     process.exit(1);
   }
 
-  await mongoose.connect(dbUrl);
+  await mongoose.connect(dbUrl, {
+    dbName: databaseNameForRuntime(),
+  });
 
   // On an empty database, create the company itself. It has no Managing
   // Director yet: the first account to sign in claims it.

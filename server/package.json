@@ -7,7 +7,8 @@
     "test": "node --test \"tests/*.test.js\"",
     "start": "node index.js",
     "seed:org": "node seedOrg.js",
-    "migrate:roles": "node migrateRoles.js"
+    "migrate:roles": "node migrateRoles.js",
+    "migrate:test-to-ems": "node migrateTestToEms.js"
   },
   "keywords": [],
   "author": "",

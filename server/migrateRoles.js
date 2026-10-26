@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 
+import { databaseNameForRuntime } from "./db/databaseName.js";
 import User from "./models/User.js";
 import { getRole, roleLabel } from "./utils/roles.js";
 
@@ -11,7 +12,9 @@ import { getRole, roleLabel } from "./utils/roles.js";
 const apply = process.argv.includes("--apply");
 
 const run = async () => {
-  await mongoose.connect(process.env.ATLASDB_URL);
+  await mongoose.connect(process.env.ATLASDB_URL, {
+    dbName: databaseNameForRuntime(),
+  });
 
   try {
     const users = await User.find({}).select("name email role").lean();
