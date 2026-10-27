@@ -21,7 +21,7 @@ import {
   todayKey,
 } from "../../utils/format";
 
-const STATUSES = ["Present", "Late", "Half Day", "Absent", "On Leave"];
+const STATUSES = ["On Time", "Late", "Absconder", "Absent", "On Leave"];
 
 const Stat = ({
   label,
@@ -185,7 +185,7 @@ const AttendanceRegister = () => {
   const [form, setForm] = useState({
     checkInTime: "",
     checkOutTime: "",
-    status: "Present",
+    status: "On Time",
     note: "",
   });
   const [saving, setSaving] = useState(false);
@@ -252,15 +252,27 @@ const AttendanceRegister = () => {
   }, [date, department, status, page, getToken]);
 
   useEffect(() => {
-    if (getToken) {
-      fetchDepartments();
+    if (!getToken) {
+      return undefined;
     }
+
+    const timer = setTimeout(() => {
+      void fetchDepartments();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [fetchDepartments, getToken]);
 
   useEffect(() => {
-    if (getToken) {
-      load();
+    if (!getToken) {
+      return undefined;
     }
+
+    const timer = setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [getToken, load]);
 
   // Keep the management register in sync when the scheduled server sweep
@@ -294,7 +306,7 @@ const AttendanceRegister = () => {
       checkOutTime: row.record?.checkOut?.at
         ? formatClock(row.record.checkOut.at)
         : "",
-      status: row.record?.status || "Present",
+      status: row.record?.status || "On Time",
       note: row.record?.note || "",
     });
   };
@@ -336,6 +348,29 @@ const AttendanceRegister = () => {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const approveEarlyDeparture = async (row) => {
+    const approve = !row.record.earlyDepartureApproved;
+    const message = approve
+      ? `Approve ${row.name}'s early clock-out?`
+      : `Revoke approval for ${row.name}'s early clock-out?`;
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    try {
+      const token = await getToken();
+      await axios.patch(
+        `${API_URL}/api/attendance/${row.record._id}`,
+        { approveEarlyDeparture: approve },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await load();
+    } catch (error) {
+      alert(error.response?.data?.error || "Unable to update early departure approval.");
     }
   };
 
@@ -388,7 +423,7 @@ const AttendanceRegister = () => {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-4xl font-medium tracking-tight text-brand-950 sm:text-5xl">
-            Attendance register
+            Attendance
           </h1>
         </div>
       </div>
@@ -427,11 +462,11 @@ const AttendanceRegister = () => {
             onClick={() => selectStatus("Late")}
           />
           <Stat
-            label="Half day"
-            value={summary?.halfDay ?? "—"}
+            label="Absconders"
+            value={summary?.absconders ?? "—"}
             tone="text-sky-700"
-            active={status === "Half Day"}
-            onClick={() => selectStatus("Half Day")}
+            active={status === "Absconder"}
+            onClick={() => selectStatus("Absconder")}
           />
           <Stat
             label="Not checked in"
@@ -583,13 +618,26 @@ const AttendanceRegister = () => {
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      <span
-                        className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-semibold ${attendanceTone(
-                          row.record?.status || "Absent"
-                        )}`}
-                      >
-                        {row.record?.status || "No record"}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-semibold ${attendanceTone(
+                            row.record?.status || "Absent"
+                          )}`}
+                        >
+                          {row.record?.status || "No record"}
+                        </span>
+                        {canRegularize && row.record?.earlyDeparture && (
+                          <button
+                            type="button"
+                            onClick={() => approveEarlyDeparture(row)}
+                            className="rounded border border-brand-200 px-2 py-0.5 text-[10px] font-semibold text-brand-700 transition hover:bg-brand-50"
+                          >
+                            {row.record.earlyDepartureApproved
+                              ? "Revoke approval"
+                              : "Approve early checkout"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {canRegularize && (
                       <td className="px-5 py-3 text-right">
@@ -686,6 +734,12 @@ const AttendanceRegister = () => {
                 />
               </label>
             </div>
+
+            {editing.record?.earlyDeparture && (
+              <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                This early clock-out is flagged as an Absconder. Use the approval control in the register row to review it.
+              </p>
+            )}
 
             <label className="mt-3 block text-sm">
               <span className="mb-1 block font-medium text-slate-600">

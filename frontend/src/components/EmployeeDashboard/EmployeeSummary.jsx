@@ -160,11 +160,19 @@ const EmployeeSummary = () => {
   const workStart = policy?.workStart || "08:00";
   const workEnd = policy?.workEnd || "17:00";
   const shiftStart = timeToMinutes(workStart) ?? 8 * 60;
-  const shiftEnd = timeToMinutes(workEnd) ?? 17 * 60;
   const graceEnd = shiftStart + Number(policy?.graceMinutes || 0);
 
   const onTheClock = Boolean(record?.checkIn) && !record?.checkOut;
   const finished = Boolean(record?.checkOut);
+  const shiftEnd = timeToMinutes(workEnd) ?? 17 * 60;
+  const isEarlyDeparture = Boolean(record?.earlyDeparture);
+  const isLate = record?.status === "Late";
+  const hasCheckedInToday = Boolean(record?.checkIn);
+  const displayedStatus = isEarlyDeparture && !record?.earlyDepartureApproved
+    ? "Absconder"
+    : isLate
+      ? "Late"
+      : "On Time";
 
   const workedMinutes = finished
     ? record?.workedMinutes || 0
@@ -209,11 +217,19 @@ const EmployeeSummary = () => {
     }
 
     if (finished) {
-      return "Day recorded";
+      return isEarlyDeparture && !record?.earlyDepartureApproved
+        ? "Absconder"
+        : "Day recorded";
     }
 
-    return onTheClock ? "On the clock" : "Not clocked in";
-  }, [loading, finished, onTheClock]);
+    return onTheClock
+      ? "On the clock"
+      : record?.checkIn
+        ? displayedStatus
+        : markerMinutes <= graceEnd
+          ? "On Time"
+          : "Not clocked in";
+  }, [loading, finished, onTheClock, displayedStatus, isEarlyDeparture, record, markerMinutes, graceEnd]);
 
   const detail = useMemo(() => {
     if (loading) {
@@ -221,9 +237,14 @@ const EmployeeSummary = () => {
     }
 
     if (finished) {
+      const earlyCheckoutNote = isEarlyDeparture
+        ? record.earlyDepartureApproved
+          ? " Early clock-out approved by a manager."
+          : " Early clock-out without manager approval."
+        : "";
       return `In at ${formatClock(record.checkIn.at)}, out at ${formatClock(
         record.checkOut.at
-      )} — ${formatDuration(workedMinutes)} recorded.`;
+      )} — ${formatDuration(workedMinutes)} recorded.${earlyCheckoutNote}`;
     }
 
     if (onTheClock) {
@@ -235,7 +256,7 @@ const EmployeeSummary = () => {
     return policy?.graceMinutes
       ? `Shift starts at ${workStart}. Late after ${formatMinutes(graceEnd)}.`
       : `Shift starts at ${workStart}.`;
-  }, [loading, finished, onTheClock, record, workedMinutes, policy, workStart, graceEnd]);
+  }, [loading, finished, onTheClock, isEarlyDeparture, record, workedMinutes, policy, workStart, graceEnd]);
 
   const leaveLine = nextLeave
     ? `${nextLeave.leaveType}, ${formatDate(nextLeave.fromDate)} to ${formatDate(
@@ -258,7 +279,7 @@ const EmployeeSummary = () => {
         <div className="min-w-0">
           <p className="text-sm text-slate-500">{formatWeekdayDate(now)}</p>
           <h1 className="mt-1 font-display text-4xl font-medium tracking-tight text-brand-950">
-            Karibu, {firstName}
+            Welcome, {firstName}
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">{roleLine}</p>
         </div>
@@ -305,10 +326,10 @@ const EmployeeSummary = () => {
             {record?.status && (
               <span
                 className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${attendanceTone(
-                  record.status
+                  displayedStatus
                 )}`}
               >
-                {record.status}
+                {displayedStatus}
               </span>
             )}
           </div>
@@ -325,7 +346,9 @@ const EmployeeSummary = () => {
                     ? `Out ${formatClock(record.checkOut.at)}`
                     : onTheClock
                       ? `${formatDuration(workedMinutes)} on the clock`
-                      : `Now ${formatMinutes(markerMinutes)}`}
+                      : hasCheckedInToday
+                        ? `Checked in at ${formatClock(record.checkIn.at)}`
+                        : `Now ${formatMinutes(markerMinutes)}`}
               </span>
             </div>
 
@@ -351,7 +374,11 @@ const EmployeeSummary = () => {
                       ? "bg-emerald-600"
                       : onTheClock
                         ? "bg-brand-700"
-                        : "bg-slate-400"
+                        : hasCheckedInToday && !isLate
+                          ? "bg-emerald-600"
+                          : isLate
+                            ? "bg-amber-500"
+                            : "bg-slate-400"
                   }`}
                   style={{ left: `${progress}%` }}
                 />

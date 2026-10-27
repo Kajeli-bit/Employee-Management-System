@@ -93,11 +93,13 @@ export const todayKey = () => {
 
 export const attendanceTone = (status) => {
   switch (status) {
-    case "Present":
+    case "On Time":
+    case "Present": // Historical status rendered as On Time by the API.
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "Late":
       return "bg-amber-50 text-amber-800 border-amber-200";
-    case "Half Day":
+    case "Absconder":
+    case "Half Day": // Historical status rendered as Absconder by the API.
       return "bg-sky-50 text-sky-700 border-sky-200";
     case "On Leave":
       return "bg-violet-50 text-violet-700 border-violet-200";

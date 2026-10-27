@@ -1,12 +1,15 @@
 import mongoose from "mongoose";
 
 export const ATTENDANCE_STATUSES = [
-  "Present",
+  "On Time",
   "Late",
-  "Half Day",
+  "Absconder",
   "Absent",
   "On Leave",
 ];
+
+// Permit historical values while APIs migrate their displayed names.
+const LEGACY_ATTENDANCE_STATUSES = ["Present", "Half Day"];
 
 export const ATTENDANCE_SOURCES = ["GPS", "Field", "Remote", "Manual"];
 
@@ -157,8 +160,31 @@ const attendanceSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ATTENDANCE_STATUSES,
-      default: "Present",
+      enum: [...ATTENDANCE_STATUSES, ...LEGACY_ATTENDANCE_STATUSES],
+      default: "On Time",
+    },
+
+    // A clock-out before the scheduled shift end is incomplete unless a
+    // manager explicitly approves the early departure.
+    earlyDeparture: {
+      type: Boolean,
+      default: false,
+    },
+
+    earlyDepartureApproved: {
+      type: Boolean,
+      default: false,
+    },
+
+    earlyDepartureApprovedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    earlyDepartureApprovedAt: {
+      type: Date,
+      default: null,
     },
 
     source: {

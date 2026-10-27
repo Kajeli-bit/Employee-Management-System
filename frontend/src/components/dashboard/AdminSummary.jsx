@@ -113,7 +113,7 @@ const AdminSummary = () => {
     attendance: {
       checkedIn: 0,
       late: 0,
-      halfDay: 0,
+      absconders: 0,
       notCheckedIn: 0,
     },
   });
@@ -341,14 +341,14 @@ const AdminSummary = () => {
               </div>
               <div className="py-1">
                 <LedgerRow
-                  label="Half days"
-                  value={dashboard.attendance?.halfDay ?? 0}
+                  label="Absconders"
+                  value={dashboard.attendance?.absconders ?? 0}
                   dot="bg-sky-400"
                   onClick={() =>
-                    navigate("/admin-dashboard/attendance?status=Half%20Day")
+                    navigate("/admin-dashboard/attendance?status=Absconder")
                   }
                   glowColor={
-                    (dashboard.attendance?.halfDay ?? 0) > 0
+                    (dashboard.attendance?.absconders ?? 0) > 0
                       ? "rgba(56,189,248,0.75)"
                       : null
                   }

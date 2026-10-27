@@ -122,9 +122,9 @@ const DayStrip = ({ records }) => {
 
   const toneFor = (record) => {
     if (!record) return "bg-slate-100 text-slate-400";
-    if (record.status === "Present") return "bg-emerald-500 text-white";
+    if (record.status === "On Time" || record.status === "Present") return "bg-emerald-500 text-white";
     if (record.status === "Late") return "bg-amber-500 text-white";
-    if (record.status === "Half Day") return "bg-sky-500 text-white";
+    if (record.status === "Absconder") return "bg-sky-500 text-white";
     if (record.status === "On Leave") return "bg-violet-500 text-white";
     return "bg-rose-500 text-white";
   };

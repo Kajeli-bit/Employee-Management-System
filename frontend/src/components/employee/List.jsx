@@ -383,7 +383,7 @@ const List = () => {
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-800 text-xl text-white">
               <FaUsers aria-hidden="true" />
             </span>
-            Employee Management
+            Staff Management
           </h1>
 
           <div className="mt-4 flex flex-wrap gap-3">

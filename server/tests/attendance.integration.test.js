@@ -2,7 +2,9 @@ import test, { after, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 import Attendance from "../models/Attendance.js";
-import { localDateKey } from "../utils/geo.js";
+import Company from "../models/Company.js";
+import { localDateKey, zonedTimeToUtc } from "../utils/geo.js";
+import { getPolicy } from "../controllers/attendanceController.js";
 
 import {
   checkIn,
@@ -62,7 +64,7 @@ const clockOut = (user, position = HEAD_OFFICE) =>
 const recordFor = (employee) =>
   Attendance.findOne({ employeeId: employee._id }).lean();
 
-test("Saturday check-in uses the 09:00 start for its lateness calculation", async () => {
+test("early Saturday check-in is on time before the grace period", async () => {
   const { company, finance, head } = await seedOrganisation();
   const { user } = await makeStaff({
     companyId: company._id,
@@ -93,6 +95,7 @@ test("Saturday check-in uses the 09:00 start for its lateness calculation", asyn
 
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.record.lateByMinutes, 0);
+  assert.equal(res.body.record.status, "On Time");
 });
 
 test("Sunday clock-in is rejected as a non-working day", async () => {
@@ -152,11 +155,11 @@ test("a fix inside the head office fence is accepted", async () => {
     `expected to be inside the 250 m fence, got ${record.checkIn.distanceMeters}`
   );
 
-  // Late/half-day maths depends on the wall clock, so assert internal
-  // consistency instead of a status that changes with the time of day.
+  // Lateness depends on the company-local wall clock, so assert the record's
+  // status matches the recorded minutes rather than a fixed time of day.
   assert.equal(
     record.status,
-    record.lateByMinutes > 0 ? "Late" : "Present"
+    record.lateByMinutes > 0 ? "Late" : "On Time"
   );
 });
 
@@ -231,7 +234,7 @@ test("clocking out without a check-in is rejected", async () => {
   assert.match(res.body.error, /not clocked in/i);
 });
 
-test("a day shorter than the threshold closes as a half day", async () => {
+test("an early clock-out is marked as an absconder", async () => {
   const { company, finance, head } = await seedOrganisation();
   const { user, employee } = await makeStaff({
     companyId: company._id,
@@ -256,39 +259,69 @@ test("a day shorter than the threshold closes as a half day", async () => {
   const res = await clockOut(user);
 
   assert.equal(res.statusCode, 200);
-  assert.equal(res.body.record.status, "Half Day");
+  assert.equal(res.body.record.status, "Absconder");
+  assert.equal(res.body.record.earlyDeparture, true);
+  assert.equal(res.body.record.earlyDepartureApproved, false);
   assert.ok(
     res.body.record.workedMinutes >= 60 &&
       res.body.record.workedMinutes < 61
   );
 });
 
-test("a full day stays present and cannot be closed twice", async () => {
-  const { company, finance, head } = await seedOrganisation();
+test("a full day stays on time and cannot be closed twice", async () => {
+  const { company: seededCompany, finance, head } = await seedOrganisation();
   const { user, employee } = await makeStaff({
-    companyId: company._id,
+    companyId: seededCompany._id,
     department: finance._id,
     createdBy: head._id,
   });
 
   await clockIn(user);
 
+  const company = await Company.findById(user.companyId).select("attendance").lean();
+  const policy = getPolicy(company);
+  const expectedShiftEnd = zonedTimeToUtc(
+    localDateKey(new Date(), policy.timezone),
+    policy.workEnd,
+    policy.timezone
+  );
+  const fullDayCheckIn = new Date(expectedShiftEnd.getTime() - 9 * 60 * 60 * 1000);
   await Attendance.updateOne(
     { employeeId: employee._id },
     {
       $set: {
-        "checkIn.at": new Date(Date.now() - 9 * 60 * 60 * 1000),
-        status: "Present",
+        "checkIn.at": fullDayCheckIn,
+        status: "On Time",
         lateByMinutes: 0,
       },
     }
   );
 
-  const first = await clockOut(user);
-  const second = await clockOut(user);
+  const realDate = globalThis.Date;
+  globalThis.Date = class extends realDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super(expectedShiftEnd);
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return expectedShiftEnd.getTime();
+    }
+  };
+
+  let first;
+  let second;
+  try {
+    first = await clockOut(user);
+    second = await clockOut(user);
+  } finally {
+    globalThis.Date = realDate;
+  }
 
   assert.equal(first.statusCode, 200);
-  assert.equal(first.body.record.status, "Present");
+  assert.equal(first.body.record.status, "On Time");
   assert.ok(first.body.record.workedMinutes >= 540);
 
   assert.equal(second.statusCode, 409);
@@ -332,7 +365,7 @@ test("clocking in replaces an absence a manager had recorded", async () => {
   assert.equal(res.statusCode, 201);
   assert.equal(
     res.body.record.status,
-    res.body.record.lateByMinutes > 0 ? "Late" : "Present"
+    res.body.record.lateByMinutes > 0 ? "Late" : "On Time"
   );
   assert.equal(res.body.record.source, "GPS");
   assert.ok(res.body.record.checkIn.at);

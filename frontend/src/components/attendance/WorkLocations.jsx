@@ -231,7 +231,6 @@ const WorkLocations = () => {
     saturdayWorkStart: "09:00",
     saturdayWorkEnd: "13:00",
     graceMinutes: 15,
-    halfDayMinutes: 240,
     requireGeofence: true,
   });
   const [form, setForm] = useState(emptyLocation);
@@ -1044,25 +1043,6 @@ const WorkLocations = () => {
                 />
               </label>
 
-              <label className="text-sm">
-                <span className="mb-1 block font-medium text-slate-600">
-                  Half day under (min)
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  max="720"
-                  value={policy.halfDayMinutes}
-                  onChange={(event) =>
-                    setPolicy((current) => ({
-                      ...current,
-                      halfDayMinutes: event.target.value,
-                    }))
-                  }
-                  disabled={!canManagePolicy}
-                  className={monoFieldClass}
-                />
-              </label>
             </div>
           </div>
         </div>

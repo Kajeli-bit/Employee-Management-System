@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 
 import Attendance from "../models/Attendance.js";
 import { localDateKey } from "../utils/geo.js";
-import { evaluateDay, resolveAutomationPolicy } from "../utils/attendanceAutomation.js";
+import {
+  closingSummary,
+  evaluateDay,
+  resolveAutomationPolicy,
+} from "../utils/attendanceAutomation.js";
 
 import {
   recordHeartbeat,
@@ -77,6 +81,43 @@ test("a company finishing at 17:00 checks at 15:30, 16:45 and 17:00", () => {
   assert.equal(rules.confirmAt, "16:45");
   assert.equal(rules.closeAt, "17:00");
   assert.equal(rules.enabled, true);
+});
+
+test("an early automatic departure is an absconder unless explicitly approved", () => {
+  const record = openRecord({ status: "On Time" });
+  const at = new Date("2026-10-23T14:00:00.000Z");
+
+  assert.deepEqual(closingSummary({ record, at, earlyDeparture: true }), {
+    workedMinutes: 540,
+    status: "Absconder",
+    earlyDeparture: true,
+  });
+  assert.deepEqual(
+    closingSummary({
+      record: { ...record, earlyDepartureApproved: true },
+      at,
+      earlyDeparture: true,
+    }),
+    { workedMinutes: 540, status: "On Time", earlyDeparture: true }
+  );
+});
+
+test("a full scheduled close keeps the existing punctuality status", () => {
+  const lateRecord = openRecord({ status: "Late" });
+  lateRecord.lateByMinutes = 1;
+  const onTimeRecord = openRecord({ status: "On Time" });
+  const at = new Date("2026-10-23T14:00:00.000Z");
+
+  assert.deepEqual(closingSummary({ record: lateRecord, at }), {
+    workedMinutes: 540,
+    status: "On Time",
+    earlyDeparture: false,
+  });
+  assert.deepEqual(closingSummary({ record: onTimeRecord, at }), {
+    workedMinutes: 540,
+    status: "On Time",
+    earlyDeparture: false,
+  });
 });
 
 test("a later finish shifts the checks with it", () => {
@@ -396,11 +437,29 @@ test("a heartbeat stores the position against the open day", async () => {
   });
 
   await startDay(employee);
+  const realDate = globalThis.Date;
+  globalThis.Date = class extends realDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super("2026-10-23T10:00:00.000Z");
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return new realDate("2026-10-23T10:00:00.000Z").getTime();
+    }
+  };
 
-  const res = await call(recordHeartbeat, {
-    user,
-    body: { ...FAR_AWAY, accuracy: 12 },
-  });
+  let res;
+  try {
+    res = await call(recordHeartbeat, {
+      user,
+      body: { ...FAR_AWAY, accuracy: 12 },
+    });
+  } finally {
+    globalThis.Date = realDate;
+  }
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.tracked, true);
@@ -425,11 +484,29 @@ test("a heartbeat inside the fence remembers the on-site time", async () => {
   });
 
   await startDay(employee);
+  const realDate = globalThis.Date;
+  globalThis.Date = class extends realDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super("2026-10-23T10:00:00.000Z");
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return new realDate("2026-10-23T10:00:00.000Z").getTime();
+    }
+  };
 
-  const res = await call(recordHeartbeat, {
-    user,
-    body: { ...HEAD_OFFICE, accuracy: 8 },
-  });
+  let res;
+  try {
+    res = await call(recordHeartbeat, {
+      user,
+      body: { ...HEAD_OFFICE, accuracy: 8 },
+    });
+  } finally {
+    globalThis.Date = realDate;
+  }
 
   assert.equal(res.body.withinGeofence, true);
 
@@ -497,7 +574,8 @@ test("the sweep queues an early departure and leaves the record open until 17:00
   assert.equal(stored.checkOut.locationName, "Nilric Head Office");
   assert.match(stored.checkOut.reason, /last seen on site at 15:30/i);
   assert.equal(stored.workedMinutes, 540);
-  assert.equal(stored.status, "Present");
+  assert.equal(stored.status, "Absconder");
+  assert.equal(stored.earlyDeparture, true);
 });
 
 test("the sweep leaves an on-site employee open and closes them at 17:00", async () => {

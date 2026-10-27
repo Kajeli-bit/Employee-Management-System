@@ -7,7 +7,11 @@ import Attendance from "../models/Attendance.js";
 
 import { CAPABILITIES, hasCapability } from "../utils/roles.js";
 import { accessibleEmployeeFilter } from "../utils/access.js";
-import { localDateKey, DEFAULT_TIMEZONE } from "../utils/geo.js";
+import {
+  localDateKey,
+  DEFAULT_TIMEZONE,
+  zonedTimeToUtc,
+} from "../utils/geo.js";
 
 export const getDashboard = async (req, res) => {
   try {
@@ -177,13 +181,26 @@ export const getDashboard = async (req, res) => {
       (record) => record.checkIn?.at
     ).length;
 
+    const saturday = new Date(`${today}T00:00:00.000Z`).getUTCDay() === 6;
+    const shiftEnd = zonedTimeToUtc(
+      today,
+      saturday
+        ? company?.attendance?.saturdayWorkEnd || "13:00"
+        : company?.attendance?.workEnd || "17:00",
+      timezone
+    );
     const rawAttendanceSummary = {
       date: today,
       checkedIn: checkedInCount,
       late: todayAttendance.filter((record) => record.status === "Late")
         .length,
-      halfDay: todayAttendance.filter(
-        (record) => record.status === "Half Day"
+      absconders: todayAttendance.filter(
+        (record) =>
+          ["Absconder", "Half Day"].includes(record.status) ||
+          (!record.checkOut?.automatic &&
+            record.checkOut?.at &&
+            shiftEnd &&
+            new Date(record.checkOut.at) < shiftEnd)
       ).length,
       onLeave: todayAttendance.filter(
         (record) => record.status === "On Leave"
@@ -197,7 +214,7 @@ export const getDashboard = async (req, res) => {
           date: today,
           checkedIn: 0,
           late: 0,
-          halfDay: 0,
+          absconders: 0,
           onLeave: 0,
           notCheckedIn: 0,
         };

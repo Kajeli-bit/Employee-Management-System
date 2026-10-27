@@ -30,7 +30,6 @@ const DEFAULT_POLICY = {
   saturdayWorkStart: "09:00",
   saturdayWorkEnd: "13:00",
   graceMinutes: 15,
-  halfDayMinutes: 240,
   requireGeofence: true,
   weekendDays: [0],
   // Automatic clock-out: an early-departure check 90 minutes before the end of
@@ -49,6 +48,36 @@ export const getPolicy = (company) => ({
 
 const getCompany = (companyId) =>
   Company.findById(companyId).select("attendance name").lean();
+
+const shiftEndAt = (date, policy) => {
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const workEnd =
+    weekday === 6
+      ? policy.saturdayWorkEnd || "13:00"
+      : policy.workEnd || "17:00";
+
+  return zonedTimeToUtc(date, workEnd, policy.timezone);
+};
+
+const displayStatus = (status) => {
+  if (status === "Present") return "On Time";
+  if (status === "Half Day") return "Absconder";
+  return status;
+};
+
+const earlyDepartureAt = (record, policy) => {
+  const checkOutAt = record?.checkOut?.at;
+  if (!checkOutAt || record.checkOut?.automatic) {
+    return Boolean(record?.earlyDeparture);
+  }
+
+  const scheduledEnd = shiftEndAt(record.date, policy);
+  return Boolean(
+    scheduledEnd &&
+      (record.earlyDeparture || new Date(checkOutAt) < scheduledEnd)
+  );
+};
 
 const serializeLocations = (locations) =>
   locations.map((location) => ({
@@ -70,7 +99,7 @@ const serializeRecord = (record) => {
   return {
     _id: record._id,
     date: record.date,
-    status: record.status,
+    status: displayStatus(record.status),
     source: record.source,
     workedMinutes: record.workedMinutes,
     lateByMinutes: record.lateByMinutes,
@@ -107,6 +136,10 @@ const serializeRecord = (record) => {
             distanceMeters: record.lastSeen.distanceMeters ?? null,
           }
         : null,
+    earlyDeparture: Boolean(record.earlyDeparture),
+    earlyDepartureApproved: Boolean(record.earlyDepartureApproved),
+    earlyDepartureApprovedBy: record.earlyDepartureApprovedBy || null,
+    earlyDepartureApprovedAt: record.earlyDepartureApprovedAt || null,
     autoClockOut: {
       outcome: record.autoClockOut?.outcome || "",
       reason: record.autoClockOut?.reason || "",
@@ -320,10 +353,14 @@ export const checkIn = async (req, res) => {
           $set: {
             userId: req.user._id,
             checkIn: punch,
-            status: lateByMinutes > 0 ? "Late" : "Present",
+            status: lateByMinutes > 0 ? "Late" : "On Time",
             source: isField ? "Field" : isRemote ? "Remote" : "GPS",
             lateByMinutes,
             workedMinutes: 0,
+            earlyDeparture: false,
+            earlyDepartureApproved: false,
+            earlyDepartureApprovedBy: null,
+            earlyDepartureApprovedAt: null,
           },
           $setOnInsert: {
             companyId: req.user.companyId,
@@ -353,7 +390,7 @@ export const checkIn = async (req, res) => {
       message:
         lateByMinutes > 0
           ? `Clocked in at ${formatClock(now, policy.timezone)}. Marked late by ${lateByMinutes} minutes.`
-          : `Clocked in at ${formatClock(now, policy.timezone)}.`,
+          : `Clocked in at ${formatClock(now, policy.timezone)}. Marked on time.`,
       record: serializeRecord(record.toObject()),
       distanceMeters: geofence.distanceMeters,
     });
@@ -421,6 +458,9 @@ export const checkOut = async (req, res) => {
       Math.round((now.getTime() - record.checkIn.at.getTime()) / 60000)
     );
 
+    const scheduledEnd = shiftEndAt(date, policy);
+    const isEarlyDeparture = Boolean(scheduledEnd && now < scheduledEnd);
+
     record.checkOut = {
       at: now,
       latitude: position.latitude,
@@ -433,12 +473,12 @@ export const checkOut = async (req, res) => {
     };
 
     record.workedMinutes = workedMinutes;
+    record.earlyDeparture = isEarlyDeparture;
 
-    // A short day is reported as a half day; otherwise the late flag sticks.
-    if (workedMinutes > 0 && workedMinutes < policy.halfDayMinutes) {
-      record.status = "Half Day";
+    if (isEarlyDeparture && !record.earlyDepartureApproved) {
+      record.status = "Absconder";
     } else if (record.status !== "Late") {
-      record.status = "Present";
+      record.status = "On Time";
     }
 
     await record.save();
@@ -495,8 +535,19 @@ export const getMyAttendance = async (req, res) => {
       from,
       to,
       policy,
-      records: records.map(serializeRecord),
-      summary: summarize(records),
+      records: records.map((record) => ({
+        ...serializeRecord(record),
+        status: earlyDepartureAt(record, policy) && !record.earlyDepartureApproved
+          ? "Absconder"
+          : displayStatus(record.status),
+      })),
+      summary: summarize(records.map((record) => ({
+        ...record,
+        status:
+          earlyDepartureAt(record, policy) && !record.earlyDepartureApproved
+            ? "Absconder"
+            : displayStatus(record.status),
+      }))),
     });
   } catch (error) {
     console.log("GET MY ATTENDANCE ERROR:", error);
@@ -586,7 +637,12 @@ export const getAttendance = async (req, res) => {
       req.query.status !== "Missing" &&
       req.query.status !== "CheckedIn"
     ) {
-      attendanceQuery.status = req.query.status;
+      attendanceQuery.status =
+        req.query.status === "Absconder"
+          ? { $in: ["Absconder", "Half Day"] }
+          : req.query.status === "On Time"
+            ? { $in: ["On Time", "Present"] }
+            : req.query.status;
     }
 
     const records = await Attendance.find(attendanceQuery)
@@ -618,30 +674,47 @@ export const getAttendance = async (req, res) => {
         department: employee.department?.dep_name || "Not assigned",
         workMode: employee.workMode,
         employmentStatus: employee.employmentStatus,
-        record: serializeRecord(record),
+        record: record
+          ? {
+              ...serializeRecord(record),
+              status:
+                earlyDepartureAt(record, policy) && !record.earlyDepartureApproved
+                  ? "Absconder"
+                  : displayStatus(record.status),
+              earlyDeparture: earlyDepartureAt(record, policy),
+            }
+          : null,
       };
     });
 
     const statusFilter = req.query.status;
     const filteredRows =
-      statusFilter === "Missing"
-        ? rows.filter((row) => !row.record?.checkIn)
-        : statusFilter === "CheckedIn"
-          ? rows.filter((row) => row.record?.checkIn)
-        : statusFilter
-          ? rows.filter(
-              (row) => row.record && row.record.status === statusFilter
-            )
-          : rows;
+      statusFilter === "Absconder"
+        ? rows.filter((row) =>
+            displayStatus(row.record?.status) === "Absconder" ||
+            (earlyDepartureAt(row.record, policy) &&
+              !row.record?.earlyDepartureApproved)
+          )
+        : statusFilter === "On Time"
+          ? rows.filter((row) => ["On Time", "Present"].includes(displayStatus(row.record?.status)))
+          : statusFilter === "Missing"
+            ? rows.filter((row) => !row.record?.checkIn)
+            : statusFilter === "CheckedIn"
+              ? rows.filter((row) => row.record?.checkIn)
+              : statusFilter
+                ? rows.filter(
+                    (row) => row.record && row.record.status === statusFilter
+                  )
+                : rows;
 
     const total = filteredRows.length;
 
     const summary = {
       roster: rows.length,
       checkedIn: rows.filter((row) => row.record?.checkIn).length,
-      present: rows.filter((row) => row.record?.status === "Present").length,
+      present: rows.filter((row) => ["On Time", "Present"].includes(displayStatus(row.record?.status))).length,
       late: rows.filter((row) => row.record?.status === "Late").length,
-      halfDay: rows.filter((row) => row.record?.status === "Half Day").length,
+      absconders: rows.filter((row) => (earlyDepartureAt(row.record, policy) && !row.record?.earlyDepartureApproved) || displayStatus(row.record?.status) === "Absconder").length,
       onLeave: rows.filter((row) => row.record?.status === "On Leave").length,
       notCheckedIn: rows.filter((row) => !row.record?.checkIn).length,
     };
@@ -730,7 +803,15 @@ export const getEmployeeHistory = async (req, res) => {
         designation: employee.designation || "",
         department: employee.department?.dep_name || "",
       },
-      records: records.map(serializeRecord),
+      records: records.map((record) => ({
+        ...serializeRecord(record),
+        status:
+          earlyDepartureAt(record, getPolicy(company)) &&
+          !record.earlyDepartureApproved
+            ? "Absconder"
+            : displayStatus(record.status),
+        earlyDeparture: earlyDepartureAt(record, getPolicy(company)),
+      })),
     });
   } catch (error) {
     console.log("GET EMPLOYEE HISTORY ERROR:", error);
@@ -756,7 +837,7 @@ export const markAttendance = async (req, res) => {
       date,
       checkInTime,
       checkOutTime,
-      status = "Present",
+      status = "On Time",
       note,
     } = req.body;
 
@@ -767,7 +848,7 @@ export const markAttendance = async (req, res) => {
       });
     }
 
-    if (!["Present", "Late", "Half Day", "Absent", "On Leave"].includes(status)) {
+    if (!["On Time", "Late", "Absconder", "Absent", "On Leave"].includes(status)) {
       return res.status(400).json({
         success: false,
         error: "Invalid attendance status",
@@ -860,6 +941,14 @@ export const markAttendance = async (req, res) => {
             Math.round((checkOut.at.getTime() - checkIn.at.getTime()) / 60000)
           )
         : 0;
+    const scheduledEnd = shiftEndAt(date, policy);
+    const isEarlyDeparture = Boolean(
+      checkOut && scheduledEnd && checkOut.at < scheduledEnd
+    );
+    const effectiveStatus =
+      isEarlyDeparture && !["Absent", "On Leave"].includes(status)
+        ? "Absconder"
+        : status;
 
     const record = await Attendance.findOneAndUpdate(
       {
@@ -872,9 +961,13 @@ export const markAttendance = async (req, res) => {
           userId: targetEmployee.userId?._id,
           checkIn,
           checkOut,
-          status,
+          status: effectiveStatus,
           source: "Manual",
           workedMinutes,
+          earlyDeparture: isEarlyDeparture,
+          earlyDepartureApproved: false,
+          earlyDepartureApprovedBy: null,
+          earlyDepartureApprovedAt: null,
           note: note?.trim() || "",
           regularizedBy: req.user._id,
         },
@@ -955,11 +1048,30 @@ export const updateAttendance = async (req, res) => {
       });
     }
 
-    const { status, note } = req.body;
+    const { status, note, approveEarlyDeparture } = req.body;
+    const policy = getPolicy(await getCompany(req.user.companyId));
+    const hasEarlyDeparture = earlyDepartureAt(record, policy);
+
+    if (approveEarlyDeparture !== undefined && status !== undefined) {
+      return res.status(400).json({
+        success: false,
+        error: "Approve or revoke an early departure separately from a status edit.",
+      });
+    }
+
+    if (
+      approveEarlyDeparture !== undefined &&
+      (typeof approveEarlyDeparture !== "boolean" || !hasEarlyDeparture)
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Only an early departure can be approved or revoked.",
+      });
+    }
 
     if (status) {
       if (
-        !["Present", "Late", "Half Day", "Absent", "On Leave"].includes(status)
+        !["On Time", "Late", "Absconder", "Absent", "On Leave"].includes(status)
       ) {
         return res.status(400).json({
           success: false,
@@ -968,6 +1080,22 @@ export const updateAttendance = async (req, res) => {
       }
 
       record.status = status;
+    }
+
+    if (approveEarlyDeparture !== undefined) {
+      record.earlyDepartureApproved = approveEarlyDeparture;
+      record.earlyDepartureApprovedBy = approveEarlyDeparture
+        ? req.user._id
+        : null;
+      record.earlyDepartureApprovedAt = approveEarlyDeparture ? new Date() : null;
+      if (hasEarlyDeparture) {
+        record.earlyDeparture = true;
+        record.status = approveEarlyDeparture
+          ? record.lateByMinutes > 0
+            ? "Late"
+            : "On Time"
+          : "Absconder";
+      }
     }
 
     if (note !== undefined) {
@@ -1008,9 +1136,9 @@ const shiftDateKey = (dateKey, days) => {
 
 const summarize = (records) => ({
   days: records.length,
-  present: records.filter((record) => record.status === "Present").length,
+  present: records.filter((record) => ["On Time", "Present"].includes(displayStatus(record.status))).length,
   late: records.filter((record) => record.status === "Late").length,
-  halfDay: records.filter((record) => record.status === "Half Day").length,
+  absconders: records.filter((record) => record.status === "Absconder").length,
   absent: records.filter((record) => record.status === "Absent").length,
   onLeave: records.filter((record) => record.status === "On Leave").length,
   totalMinutes: records.reduce(

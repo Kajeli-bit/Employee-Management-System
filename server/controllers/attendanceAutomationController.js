@@ -310,10 +310,11 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
       continue;
     }
 
+    const earlyDeparture = decision.outcome === "left-premises";
     const { workedMinutes, status } = closingSummary({
       record,
       at: decision.at,
-      policy,
+      earlyDeparture,
     });
 
     const seen =
@@ -343,6 +344,7 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
           },
           workedMinutes,
           status,
+          earlyDeparture,
           "autoClockOut.evaluatedAt": now,
           "autoClockOut.outcome": decision.outcome,
           "autoClockOut.reason": decision.reason,

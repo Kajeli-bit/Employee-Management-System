@@ -10,13 +10,13 @@ import { isManagementRole } from "../utils/roles";
 import Loader from "../components/common/Loader";
 
 const inputClass =
-  "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 read-only:bg-gray-100 read-only:text-gray-600";
+  "w-full rounded-xl border border-[#e1d8e9] bg-[#fdfcff] px-4 py-3 text-sm text-brand-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70 read-only:bg-brand-50 read-only:text-slate-600";
 
 const Field = ({ label, name, value, onChange, ...rest }) => (
   <div>
     <label
       htmlFor={name}
-      className="mb-1 block text-xs font-medium text-gray-700 sm:text-sm"
+      className="mb-1.5 block text-sm font-medium text-slate-700"
     >
       {label}
     </label>
@@ -164,7 +164,7 @@ const Login = () => {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-950 px-4 py-8 sm:py-12">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-950 px-3 py-3 sm:px-6 sm:py-10">
       {!reducedMotion && (
         <video
           aria-hidden="true"
@@ -173,62 +173,85 @@ const Login = () => {
           loop
           playsInline
           src="/login-bg.mp4"
-          className="absolute inset-0 h-full w-full object-cover opacity-75"
+          className="absolute inset-0 h-full w-full object-cover opacity-60"
         />
       )}
 
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-brand-800/35"
-      />
+      <div aria-hidden="true" className="absolute inset-0 bg-[#24132f]/55" />
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-brand-900/35 via-transparent to-brand-950/75" />
 
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-t from-brand-950/45 via-brand-900/10 to-brand-900/25"
-      />
+      <div className="relative z-10 mx-auto grid w-full max-w-[680px] overflow-hidden rounded-[1.75rem] border border-white/70 bg-white shadow-[0_32px_90px_rgba(24,9,38,0.34)] md:max-w-[680px] md:grid-cols-[0.92fr_1.08fr]">
+        <section className="relative isolate flex min-h-[88px] flex-col justify-center gap-1.5 overflow-hidden bg-brand-950 px-3 py-2 text-white sm:min-h-[100px] sm:gap-3 sm:px-5 sm:py-3 md:min-h-[400px] md:justify-between md:gap-0 md:px-8 md:py-8">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 opacity-90"
+            style={{
+              backgroundImage:
+                "radial-gradient(ellipse at 82% 18%, rgba(163,124,208,0.27), transparent 38%), radial-gradient(rgba(255,255,255,0.08) 0.8px, transparent 0.8px)",
+              backgroundSize: "auto, 22px 22px",
+            }}
+          />
 
-      <div className="relative mx-auto grid w-full max-w-3xl overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl md:grid-cols-[1fr_1.15fr]">
-        <div
-          className="relative flex flex-col justify-between gap-6 bg-brand-950 px-5 py-6 text-white sm:gap-8 sm:px-8 sm:py-8"
-          style={{
-            backgroundImage:
-              "radial-gradient(rgba(255,255,255,0.13) 1px, transparent 1px)",
-            backgroundSize: "18px 18px",
-          }}
-        >
-          <div className="text-center md:text-left">
-            <span className="relative mx-auto inline-block rounded-2xl bg-white px-3 py-2 shadow-md md:mx-0 sm:px-4 sm:py-2.5">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 320 320"
+            className="pointer-events-none absolute -bottom-10 -right-12 h-36 w-36 text-[#d4bd91]/40 sm:h-48 sm:w-48 md:-bottom-16 md:-right-20 md:h-64 md:w-64"
+            fill="none"
+          >
+            <circle cx="160" cy="160" r="142" stroke="currentColor" />
+            <circle cx="160" cy="160" r="108" stroke="currentColor" />
+            <circle cx="160" cy="160" r="74" stroke="currentColor" />
+            <path d="M28 210c44-12 70-57 117-61 48-4 77 37 147 14" stroke="currentColor" />
+            <path d="M66 279c24-44 65-82 113-93 48-11 76 1 106-22" stroke="currentColor" />
+            <circle cx="216" cy="145" r="6" fill="currentColor" />
+          </svg>
+
+          <div className="relative z-10 flex justify-center md:justify-start">
+            <span className="inline-flex rounded-2xl bg-white px-4 py-2.5 shadow-[0_8px_25px_rgba(16,8,24,0.16)]">
               <img
                 src="/nilric-logo.png"
                 alt="Nilric General Traders"
-                className="h-12 w-auto sm:h-14"
+                className="h-10 w-auto sm:h-12 md:h-11"
               />
             </span>
-
-            <h1 className="relative mt-5 text-xl font-semibold tracking-tight sm:mt-6 sm:text-2xl">
-              Nilric Employee Portal
-            </h1>
-
-            <p className="relative mx-auto mt-2 max-w-sm text-sm leading-6 text-brand-200 md:mx-0">
-              People, projects and attendance for Nilric General
-              Traders.
-            </p>
           </div>
 
-          <p className="relative text-center text-xs leading-5 text-brand-300 md:text-left">
-            Clock in from any Nilric site — your location is checked
-            automatically.
-          </p>
-        </div>
+          <div className="relative z-10 my-1 text-center sm:my-2 md:my-0 md:text-left">
+            <p className="font-display text-xl font-semibold leading-tight text-white sm:text-2xl md:mb-3 md:font-medium md:text-sm md:text-brand-200">
+              Nilric Staff Portal
+            </p>
+            <h1 className="hidden font-display text-4xl font-medium leading-[1.02] tracking-tight text-white md:block sm:text-5xl lg:text-[3.5rem]">
+              Welcome
+              <br />
+              back.
+            </h1>
+          </div>
 
-        <div className="flex min-w-0 flex-col justify-center bg-white p-4 sm:p-6 md:p-7">
+          <div className="relative z-10 mx-auto hidden max-w-xs items-center gap-3 text-center md:mx-0 md:flex md:text-left">
+            <span aria-hidden="true" className="h-8 w-px shrink-0 bg-[#d4bd91]" />
+            <p className="text-xs leading-5 text-white/65">
+              Secure sign-in for authorised Nilric staff.
+            </p>
+          </div>
+        </section>
+
+        <div className="flex min-w-0 flex-col justify-center border-t border-[#eee8f2] bg-white px-4 py-3 sm:px-6 sm:py-5 md:border-l md:border-t-0 md:px-8 md:py-6">
           {error && (
-            <div className="mb-4 rounded-lg bg-red-50 px-3 py-3 text-sm text-red-600">
+            <div
+              role="alert"
+              className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-800"
+            >
               {error}
             </div>
           )}
 
           <Show when="signed-out">
+            <div className="mb-1 sm:mb-2">
+              <h2 className="text-center font-display text-2xl font-medium tracking-tight text-brand-950 sm:text-[1.9rem]">
+                Sign in to continue
+              </h2>
+            </div>
+
             {!clerkLoaded && <Loader label="Preparing sign-in…" />}
 
             <div
@@ -241,25 +264,32 @@ const Login = () => {
                 appearance={{
                   variables: {
                     colorPrimary: "#63358b",
-                    colorText: "#1e1b2e",
+                    colorText: "#271136",
                     colorTextSecondary: "#64748b",
-                    borderRadius: "0.75rem",
+                    borderRadius: "1rem",
                   },
                   elements: {
                     rootBox: "w-full max-w-full min-w-0 !w-full",
                     cardBox: "w-full max-w-full min-w-0 shadow-none !w-full",
-                    card: "w-full max-w-full min-w-0 gap-5 bg-transparent p-0 shadow-none !w-full",
+                    card: "w-full max-w-full min-w-0 gap-2 bg-transparent p-0 shadow-none !w-full sm:gap-3",
+                    headerTitle: { display: "none" },
                     headerSubtitle: { display: "none" },
                     // Accounts are created by HR/MD, so the sign-up prompt,
                     // the Clerk badge and the dev-mode badge are hidden.
                     footer: { display: "none" },
+                    formButtonPrimary: {
+                      minHeight: "calc(var(--clerk-button-height, 2.5rem) + 5px)",
+                      height: "calc(var(--clerk-button-height, 2.5rem) + 5px)",
+                      borderRadius: "0.75rem",
+                      boxShadow: "0 7px 18px rgba(74, 38, 106, 0.18)",
+                    },
                     socialButtonsBlockButton: {
-                      height: "calc(var(--clerk-social-button-height, 52px) + 15px)",
+                      height: "calc(var(--clerk-social-button-height, 52px) - 1px)",
                       minHeight:
-                        "calc(var(--clerk-social-button-height, 52px) + 15px)",
-                      padding: "0 1.25rem",
+                        "calc(var(--clerk-social-button-height, 52px) - 1px)",
+                      padding: "0 1rem",
                       border: "1px solid #e4d9ef",
-                      borderRadius: "0.9rem",
+                      borderRadius: "1rem",
                       backgroundColor: "#fbf9fd",
                       boxShadow: "0 3px 10px rgba(74, 38, 106, 0.06)",
                       transition:
@@ -271,6 +301,18 @@ const Login = () => {
                       letterSpacing: "0.01em",
                     },
                     socialButtonsBlockButtonArrow: { display: "none" },
+                    formFieldLabel: {
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                    },
+                    formFieldInput: {
+                      height: "calc(var(--clerk-input-height, 2.5rem) + 5px)",
+                      minHeight:
+                        "calc(var(--clerk-input-height, 2.5rem) + 5px)",
+                      borderRadius: "0.75rem",
+                      borderColor: "#e1d8e9",
+                      boxShadow: "none",
+                    },
                   },
                 }}
               />
@@ -296,7 +338,7 @@ const Login = () => {
                     <button
                       type="button"
                       onClick={checkSetup}
-                      className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+                      className="rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline-brand-700"
                     >
                       Try again
                     </button>
@@ -376,7 +418,7 @@ const Login = () => {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="w-full rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="w-full rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(99,53,139,0.2)] transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                       {saving
                         ? "Creating company…"

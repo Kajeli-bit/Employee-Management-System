@@ -92,7 +92,6 @@ export const resolveAutomationPolicy = (policy = {}) => {
     earlyDepartureAt: clockString(workEndMinutes - earlyMinutes),
     confirmAt: clockString(workEndMinutes - confirmMinutes),
     closeAt: clockString(workEndMinutes),
-    halfDayMinutes: Number(policy.halfDayMinutes) || 240,
     requireGeofence: policy.requireGeofence !== false,
   };
 };
@@ -270,23 +269,23 @@ export const evaluateDay = ({
 
 // Worked minutes and status for a day the server closes itself, matching what
 // a manual clock-out would have recorded.
-export const closingSummary = ({ record, at, policy }) => {
+export const closingSummary = ({
+  record,
+  at,
+  earlyDeparture = false,
+}) => {
   const checkInAt = new Date(record.checkIn.at);
   const workedMinutes = Math.max(
     0,
     Math.round((new Date(at).getTime() - checkInAt.getTime()) / 60000)
   );
-  const halfDayMinutes = Number(policy?.halfDayMinutes) || 240;
+  const isEarlyDeparture = Boolean(earlyDeparture);
+  const status =
+    isEarlyDeparture && !record.earlyDepartureApproved
+      ? "Absconder"
+      : record.status === "Late" && record.lateByMinutes > 0
+        ? "Late"
+        : "On Time";
 
-  let status;
-
-  if (workedMinutes > 0 && workedMinutes < halfDayMinutes) {
-    status = "Half Day";
-  } else if (record.status === "Late") {
-    status = "Late";
-  } else {
-    status = "Present";
-  }
-
-  return { workedMinutes, status };
+  return { workedMinutes, status, earlyDeparture: isEarlyDeparture };
 };

@@ -257,7 +257,6 @@ export const updateAttendancePolicy = async (req, res) => {
       saturdayWorkStart,
       saturdayWorkEnd,
       graceMinutes,
-      halfDayMinutes,
       requireGeofence,
       autoClockOut,
       earlyDepartureCheckMinutes,
@@ -311,13 +310,6 @@ export const updateAttendancePolicy = async (req, res) => {
       update["attendance.graceMinutes"] = Math.max(
         0,
         Math.min(120, Number(graceMinutes) || 0)
-      );
-    }
-
-    if (halfDayMinutes !== undefined) {
-      update["attendance.halfDayMinutes"] = Math.max(
-        0,
-        Math.min(720, Number(halfDayMinutes) || 0)
       );
     }
 

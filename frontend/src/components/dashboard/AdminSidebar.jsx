@@ -85,7 +85,7 @@ const AdminSidebar = () => {
         {showEmployees && (
           <NavLink to="/admin-dashboard/employees" className={menuClass}>
             <FaUsers />
-            <span>Employees</span>
+            <span>Staff Management</span>
           </NavLink>
         )}
 
@@ -101,7 +101,7 @@ const AdminSidebar = () => {
         {showAttendance && (
           <NavLink to="/admin-dashboard/attendance" className={menuClass}>
             <FaClock />
-            <span>Team attendance</span>
+            <span>Staff attendance</span>
           </NavLink>
         )}
 

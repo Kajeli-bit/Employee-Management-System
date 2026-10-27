@@ -51,12 +51,6 @@ const companySchema = new mongoose.Schema(
         min: 0,
       },
 
-      halfDayMinutes: {
-        type: Number,
-        default: 240,
-        min: 0,
-      },
-
       requireGeofence: {
         type: Boolean,
         default: true,
