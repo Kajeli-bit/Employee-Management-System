@@ -303,8 +303,8 @@ const MyAttendance = () => {
   const checkedIn = Boolean(record?.checkIn);
   const checkedOut = Boolean(record?.checkOut);
 
-  // The automatic clock-out times are derived from the company policy, so a
-  // company that finishes at 18:00 sees its own times here.
+  // The automatic clock-out boundary follows the company policy, but the
+  // automation never closes a day before 17:00 (including Saturday).
   const automation = useMemo(() => {
     const policy = today?.policy;
 
@@ -332,13 +332,9 @@ const MyAttendance = () => {
 
     const end = toMinutes(policy.workEnd, 17 * 60);
     const saturdayEnd = toMinutes(policy.saturdayWorkEnd, 13 * 60);
-    const confirmMinutes = Number(policy.autoClockOutConfirmMinutes ?? 15) || 0;
-
     return {
-      workEnd: label(end),
-      saturdayEnd: label(saturdayEnd),
-      confirm: label(end - confirmMinutes),
-      saturdayConfirm: label(saturdayEnd - confirmMinutes),
+      workEnd: label(Math.max(end, 17 * 60)),
+      saturdayEnd: label(Math.max(saturdayEnd, 17 * 60)),
     };
   }, [today?.policy]);
 
@@ -608,17 +604,18 @@ const MyAttendance = () => {
                   Auto clock-out.
                 </span>{" "}
                 While you are clocked in, this app reports your location every
-                few minutes. If you forget to clock out, the day closes at{" "}
+                few minutes. If you are still on site after{" "}
                 <span className="font-mono font-semibold text-slate-700">
-                  {automation.workEnd}
-                </span>{" "}
-                when your device is still on site near the scheduled end
-                ({automation.workEnd} on weekdays, {automation.saturdayEnd}{" "}
-                Saturday). If you leave before then, it records the last on-site
-                location and time, then clocks you out at the scheduled end. The
-                confirmation checks are {automation.confirm} weekdays and{" "}
-                {automation.saturdayConfirm} Saturday. Sunday is a non-working
-                day.
+                  17:00
+                </span>
+                , the system will not automatically clock you out. For office
+                employees, if you leave the work site before {automation.workEnd}{" "}
+                on weekdays or {automation.saturdayEnd} on Saturday, and a recent
+                location confirms you are still outside after that time, it records your
+                last on-site location and time as the clock-out. If that leaves
+                you with less than nine
+                hours worked, you are marked Absconder unless the early departure
+                is approved. Sunday is a non-working day.
               </p>
             </div>
           )}

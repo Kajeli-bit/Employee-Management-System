@@ -174,9 +174,8 @@ export const recordHeartbeat = async (req, res) => {
 };
 
 // Applies the automatic clock-out rules to every day that is still open for one
-// company. Idempotent: closing a day twice is impossible because the update is
-// guarded by checkOut: null, and the presence check does not depend on how many
-// times it ran.
+// company. The decision requires a recent off-site fix after shift end, and the
+// database write is guarded by checkOut: null so the close is idempotent.
 export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
   const company = await Company.findById(companyId)
     .select("name attendance")
@@ -310,16 +309,12 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
       continue;
     }
 
-    const earlyDeparture = decision.outcome === "left-premises";
-    const { workedMinutes, status } = closingSummary({
-      record,
-      at: decision.at,
-      earlyDeparture,
-    });
+    const { workedMinutes, status, earlyDeparture: closedEarly } =
+      closingSummary({ record, at: decision.at });
 
     const seen =
       decision.outcome === "left-premises"
-        ? record.lastSeenInside || record.lastSeen || {}
+        ? record.lastSeenInside || record.checkIn || {}
         : record.lastSeen || {};
 
     const closed = await Attendance.findOneAndUpdate(
@@ -344,7 +339,7 @@ export const sweepCompanyDay = async ({ companyId, now = new Date() }) => {
           },
           workedMinutes,
           status,
-          earlyDeparture,
+          earlyDeparture: closedEarly,
           "autoClockOut.evaluatedAt": now,
           "autoClockOut.outcome": decision.outcome,
           "autoClockOut.reason": decision.reason,

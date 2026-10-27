@@ -23,6 +23,29 @@ import {
 
 const STATUSES = ["On Time", "Late", "Absconder", "Absent", "On Leave"];
 
+const getAttendanceStatusLabels = (row) => {
+  const record = row.record;
+  const fallbackStatus =
+    record?.status || row.status || (record ? "Absent" : "No record");
+  const checkInStatus = record?.checkIn?.at
+    ? record.checkInStatus ||
+      (record.lateByMinutes > 0 || fallbackStatus === "Late" ? "Late" : "On Time")
+    : ["Absent", "On Leave"].includes(fallbackStatus)
+      ? fallbackStatus
+      : "Not checked in";
+  const checkOutStatus = record?.checkOut?.at
+    ? record.checkOutStatus ||
+      ((record.earlyDeparture || fallbackStatus === "Absconder")
+        ? "Absconder"
+        : "Checked Out")
+    : "Not checked out";
+
+  return [
+    { phase: "IN", value: checkInStatus },
+    { phase: "OUT", value: checkOutStatus },
+  ];
+};
+
 const Stat = ({
   label,
   value,
@@ -37,7 +60,7 @@ const Stat = ({
       type={onClick ? "button" : undefined}
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
-      className={`px-5 py-2.5 text-left ${
+      className={`min-w-0 px-2 py-2.5 text-left sm:px-3 lg:flex lg:h-[66px] lg:flex-col lg:justify-center lg:overflow-hidden lg:px-2 ${
         onClick
           ? `transition hover:bg-slate-50 ${
               active ? "bg-brand-50 ring-1 ring-inset ring-brand-300" : ""
@@ -45,10 +68,10 @@ const Stat = ({
           : ""
       }`}
     >
-      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+      <p className="whitespace-nowrap text-[10px] leading-[12px] font-medium uppercase tracking-wide text-slate-400 lg:text-[11px]">
         {label}
       </p>
-      <p className={`mt-1 font-mono text-2xl leading-none font-semibold tabular-nums ${tone}`}>
+      <p className={`mt-1 whitespace-nowrap font-mono text-xl leading-[20px] font-semibold tabular-nums ${tone}`}>
         {value}
       </p>
     </Tag>
@@ -109,7 +132,7 @@ const DepartmentMenu = ({ value, options, onChange }) => {
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-2 bg-transparent text-left text-sm font-semibold text-slate-900 outline-none transition hover:text-brand-700"
+        className="flex w-full items-center justify-between gap-2 bg-transparent text-left text-[13px] leading-[16px] font-semibold text-slate-900 outline-none transition hover:text-brand-700 lg:text-sm"
       >
         <span className="truncate">{selected.label}</span>
         <FaChevronDown
@@ -163,7 +186,7 @@ const AttendanceRegister = () => {
   const [status, setStatus] = useState(() => {
     const initial = searchParams.get("status") || "";
     return initial === "Missing" ||
-      initial === "CheckedIn" ||
+      ["CheckedIn", "CheckedOut"].includes(initial) ||
       STATUSES.includes(initial)
       ? initial
       : "";
@@ -428,110 +451,117 @@ const AttendanceRegister = () => {
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-3 sm:divide-y-0 sm:divide-x lg:grid-cols-[210px_repeat(5,minmax(0,1fr))_minmax(260px,1.5fr)]">
-          <div className="px-5 py-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-              Department
-            </p>
-            <DepartmentMenu
-              value={department}
-              options={departments}
-              onChange={(id) => {
-                setDepartment(id);
+      <div className="mt-5 grid grid-cols-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white sm:grid-cols-3 sm:divide-y-0 sm:divide-x lg:grid-cols-[145px_repeat(6,minmax(0,1fr))_240px]">
+        <div className="min-w-0 px-2 py-3 sm:px-3 lg:flex lg:h-[66px] lg:flex-col lg:justify-center lg:overflow-hidden lg:px-2">
+          <p className="whitespace-nowrap text-[10px] leading-[12px] font-medium uppercase tracking-wide text-slate-400 lg:text-[11px]">
+            Department
+          </p>
+          <DepartmentMenu
+            value={department}
+            options={departments}
+            onChange={(id) => {
+              setDepartment(id);
+              setPage(1);
+            }}
+          />
+        </div>
+        <Stat
+          label="On the roster"
+          value={summary?.roster ?? "—"}
+          active={status === ""}
+          onClick={() => selectStatus("")}
+        />
+        <Stat
+          label="Checked in"
+          value={summary?.checkedIn ?? "—"}
+          active={status === "CheckedIn"}
+          onClick={() => selectStatus("CheckedIn")}
+        />
+        <Stat
+          label="Checked out"
+          value={summary?.checkedOut ?? "—"}
+          tone="text-emerald-700"
+          active={status === "CheckedOut"}
+          onClick={() => selectStatus("CheckedOut")}
+        />
+        <Stat
+          label="Late"
+          value={summary?.late ?? "—"}
+          tone="text-amber-700"
+          active={status === "Late"}
+          onClick={() => selectStatus("Late")}
+        />
+        <Stat
+          label="Absconders"
+          value={summary?.absconders ?? "—"}
+          tone="text-sky-700"
+          active={status === "Absconder"}
+          onClick={() => selectStatus("Absconder")}
+        />
+        <Stat
+          label="Not checked in"
+          value={summary?.notCheckedIn ?? "—"}
+          tone="text-rose-700"
+          active={status === "Missing"}
+          onClick={() => selectStatus("Missing")}
+        />
+
+        <div className="col-span-2 flex min-w-0 flex-col justify-center bg-slate-50/60 px-3 py-2 sm:col-span-3 lg:col-span-1 lg:h-[66px] lg:overflow-hidden">
+          <div className="flex min-w-0 items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
+            <button
+              type="button"
+              onClick={() => moveDate(-1)}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-700 active:scale-95"
+              aria-label="Previous day"
+            >
+              <FaChevronLeft className="text-sm" />
+            </button>
+            <button
+              type="button"
+              onClick={openDatePicker}
+              title="Pick a date"
+              className="group flex min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 py-0 transition hover:bg-brand-50"
+              aria-label={`Choose attendance date, currently ${dateLabel}`}
+            >
+              <span className="whitespace-nowrap text-[15px] leading-[18px] font-semibold tracking-tight tabular-nums text-slate-900 transition group-hover:text-brand-800">
+                {dateLabel}
+              </span>
+              <span
+                className={`whitespace-nowrap text-[11px] leading-[13px] tabular-nums ${
+                  isToday ? "font-medium text-brand-700" : "text-slate-500"
+                }`}
+              >
+                {dateCaption}
+              </span>
+            </button>
+            <input
+              ref={dateInputRef}
+              id="attendance-date"
+              type="date"
+              tabIndex={-1}
+              aria-hidden="true"
+              value={date}
+              max={today}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value || value > today) return;
+                setDate(value);
                 setPage(1);
               }}
+              className="sr-only"
             />
-          </div>
-          <Stat
-            label="On the roster"
-            value={summary?.roster ?? "—"}
-            active={status === ""}
-            onClick={() => selectStatus("")}
-          />
-          <Stat
-            label="Checked in"
-            value={summary?.checkedIn ?? "—"}
-            active={status === "CheckedIn"}
-            onClick={() => selectStatus("CheckedIn")}
-          />
-          <Stat
-            label="Late"
-            value={summary?.late ?? "—"}
-            tone="text-amber-700"
-            active={status === "Late"}
-            onClick={() => selectStatus("Late")}
-          />
-          <Stat
-            label="Absconders"
-            value={summary?.absconders ?? "—"}
-            tone="text-sky-700"
-            active={status === "Absconder"}
-            onClick={() => selectStatus("Absconder")}
-          />
-          <Stat
-            label="Not checked in"
-            value={summary?.notCheckedIn ?? "—"}
-            tone="text-rose-700"
-            active={status === "Missing"}
-            onClick={() => selectStatus("Missing")}
-          />
-
-          <div className="col-span-2 flex min-w-0 flex-col justify-center bg-slate-50/60 px-4 py-2 sm:col-span-3 lg:col-span-1">
-            <div className="flex min-w-0 items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
-              <button
-                type="button"
-                onClick={() => moveDate(-1)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-700 active:scale-95"
-                aria-label="Previous day"
-              >
-                <FaChevronLeft className="text-sm" />
-              </button>
-              <button
-                type="button"
-                onClick={openDatePicker}
-                title="Pick a date"
-                className="group flex min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-3 py-0 transition hover:bg-brand-50"
-                aria-label={`Choose attendance date, currently ${dateLabel}`}
-              >
-                <span className="whitespace-nowrap text-base font-semibold leading-tight tracking-tight tabular-nums text-slate-900 transition group-hover:text-brand-800">
-                  {dateLabel}
-                </span>
-                <span
-                  className={`whitespace-nowrap text-[11px] leading-tight tabular-nums ${
-                    isToday ? "font-medium text-brand-700" : "text-slate-500"
-                  }`}
-                >
-                  {dateCaption}
-                </span>
-              </button>
-              <input
-                ref={dateInputRef}
-                id="attendance-date"
-                type="date"
-                tabIndex={-1}
-                aria-hidden="true"
-                value={date}
-                max={today}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (!value || value > today) return;
-                  setDate(value);
-                  setPage(1);
-                }}
-                className="sr-only"
-              />
-              <button
-                type="button"
-                onClick={() => moveDate(1)}
-                disabled={isToday}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500 disabled:active:scale-100"
-                aria-label="Next day"
-              >
-                <FaChevronRight className="text-sm" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => moveDate(1)}
+              disabled={isToday}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-brand-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500 disabled:active:scale-100"
+              aria-label="Next day"
+            >
+              <FaChevronRight className="text-sm" />
+            </button>
           </div>
         </div>
+      </div>
 
       {error && (
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
@@ -541,18 +571,24 @@ const AttendanceRegister = () => {
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-sm">
+          <table className="w-full min-w-[880px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-2.5 font-semibold">Department</th>
-                <th className="px-3 py-2.5 font-semibold">Employee</th>
-                <th className="px-3 py-2.5 font-semibold">In</th>
-                <th className="px-3 py-2.5 font-semibold">Out</th>
-                <th className="px-3 py-2.5 font-semibold">Worked</th>
-                <th className="px-3 py-2.5 font-semibold">Site</th>
-                <th className="px-3 py-2.5 font-semibold">Status</th>
+                <th className="w-[15%] px-5 py-2.5 font-semibold">Department</th>
+                <th className="w-[18%] px-3 py-2.5 font-semibold">Employee</th>
+                <th className="w-[8%] px-3 py-2.5 font-semibold">In</th>
+                <th className="w-[8%] px-3 py-2.5 font-semibold">Out</th>
+                <th className="w-[10%] px-3 py-2.5 font-semibold">Worked</th>
+                <th className="w-[16%] px-3 py-2.5 font-semibold">Site</th>
+                <th
+                  className={`${
+                    canRegularize ? "w-[19%]" : "w-[25%]"
+                  } px-3 py-2.5 font-semibold`}
+                >
+                  Status
+                </th>
                 {canRegularize && (
-                  <th className="px-5 py-2.5 text-right font-semibold">
+                  <th className="w-[6%] px-2 py-2.5 text-right font-semibold">
                     Correct
                   </th>
                 )}
@@ -580,20 +616,20 @@ const AttendanceRegister = () => {
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.employeeId} className="text-slate-700">
-                    <td className="px-5 py-3 text-xs text-slate-600">
+                  <tr key={row.employeeId} className="h-[57px] text-slate-700">
+                    <td className="px-5 py-2 text-xs text-slate-600">
                       {row.department}
                     </td>
-                    <td className="px-3 py-3">
-                      <p className="font-medium text-slate-900">{row.name}</p>
+                    <td className="px-3 py-2">
+                      <p className="truncate font-medium text-slate-900">{row.name}</p>
                       <p className="text-xs text-slate-500">
                         {row.designation || row.role}
                       </p>
                     </td>
-                    <td className="px-3 py-3 font-mono">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono">
                       {formatClock(row.record?.checkIn?.at)}
                     </td>
-                    <td className="px-3 py-3 font-mono">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono">
                       {formatClock(row.record?.checkOut?.at)}
                       {row.record?.checkOut?.automatic && (
                         <span
@@ -604,12 +640,12 @@ const AttendanceRegister = () => {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3 font-mono text-xs">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
                       {row.record?.workedMinutes
                         ? formatDuration(row.record.workedMinutes)
                         : "—"}
                     </td>
-                    <td className="px-3 py-3 text-xs text-slate-500">
+                    <td className="px-3 py-2 text-xs text-slate-500">
                       <p>{row.record?.checkIn?.locationName || "—"}</p>
                       {row.record?.checkIn?.distanceMeters !== undefined && (
                         <p className="text-slate-400">
@@ -617,36 +653,44 @@ const AttendanceRegister = () => {
                         </p>
                       )}
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-semibold ${attendanceTone(
-                            row.record?.status || "Absent"
-                          )}`}
-                        >
-                          {row.record?.status || "No record"}
-                        </span>
-                        {canRegularize && row.record?.earlyDeparture && (
-                          <button
-                            type="button"
-                            onClick={() => approveEarlyDeparture(row)}
-                            className="rounded border border-brand-200 px-2 py-0.5 text-[10px] font-semibold text-brand-700 transition hover:bg-brand-50"
+                    <td className="px-2 py-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {getAttendanceStatusLabels(row).map(({ phase, value }) => (
+                          <span
+                            key={phase}
+                            title={`${phase === "IN" ? "Clock in" : "Clock out"}: ${value}`}
+                            aria-label={`${phase === "IN" ? "Clock in" : "Clock out"}: ${value}`}
+                            className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${attendanceTone(
+                              value
+                            )}`}
                           >
-                            {row.record.earlyDepartureApproved
-                              ? "Revoke approval"
-                              : "Approve early checkout"}
-                          </button>
-                        )}
+                            <span className="text-[9px] font-bold tracking-wide opacity-60">
+                              {phase}
+                            </span>
+                            {value}
+                          </span>
+                        ))}
                       </div>
+                      {canRegularize && row.record?.earlyDeparture && (
+                        <button
+                          type="button"
+                          onClick={() => approveEarlyDeparture(row)}
+                          className="ml-1 rounded border border-brand-200 px-1.5 py-0.5 text-[9px] font-semibold text-brand-700 transition hover:bg-brand-50"
+                        >
+                          {row.record.earlyDepartureApproved
+                            ? "Revoke approval"
+                            : "Approve early checkout"}
+                        </button>
+                      )}
                     </td>
                     {canRegularize && (
-                      <td className="px-5 py-3 text-right">
+                      <td className="whitespace-nowrap px-2 py-2 text-right">
                         <button
                           type="button"
                           onClick={() => openRegularize(row)}
-                          className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                          className="inline-flex items-center gap-1 rounded border border-slate-200 px-1.5 py-1 text-[10px] font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
                         >
-                          <FaPen className="text-[9px]" />
+                          <FaPen className="text-[8px]" />
                           Fix
                         </button>
                       </td>

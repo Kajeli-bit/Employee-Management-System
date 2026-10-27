@@ -79,6 +79,23 @@ const earlyDepartureAt = (record, policy) => {
   );
 };
 
+const checkInStatus = (record) =>
+  record?.checkIn?.at
+    ? record.lateByMinutes > 0 || displayStatus(record.status) === "Late"
+      ? "Late"
+      : "On Time"
+    : "";
+
+const checkOutStatus = (record, policy) => {
+  if (!record?.checkOut?.at) {
+    return "";
+  }
+
+  return earlyDepartureAt(record, policy) && !record.earlyDepartureApproved
+    ? "Absconder"
+    : "Checked Out";
+};
+
 const serializeLocations = (locations) =>
   locations.map((location) => ({
     _id: location._id,
@@ -631,11 +648,10 @@ export const getAttendance = async (req, res) => {
 
     attendanceQuery.date = date;
 
-    // "Missing" and "CheckedIn" are roster-level filters, not record statuses.
+    // Roster-level states are derived from punches rather than stored status.
     if (
       req.query.status &&
-      req.query.status !== "Missing" &&
-      req.query.status !== "CheckedIn"
+      !["Missing", "CheckedIn", "CheckedOut"].includes(req.query.status)
     ) {
       attendanceQuery.status =
         req.query.status === "Absconder"
@@ -677,10 +693,9 @@ export const getAttendance = async (req, res) => {
         record: record
           ? {
               ...serializeRecord(record),
-              status:
-                earlyDepartureAt(record, policy) && !record.earlyDepartureApproved
-                  ? "Absconder"
-                  : displayStatus(record.status),
+              status: displayStatus(record.status),
+              checkInStatus: checkInStatus(record),
+              checkOutStatus: checkOutStatus(record, policy),
               earlyDeparture: earlyDepartureAt(record, policy),
             }
           : null,
@@ -691,27 +706,48 @@ export const getAttendance = async (req, res) => {
     const filteredRows =
       statusFilter === "Absconder"
         ? rows.filter((row) =>
-            displayStatus(row.record?.status) === "Absconder" ||
-            (earlyDepartureAt(row.record, policy) &&
-              !row.record?.earlyDepartureApproved)
+            row.record?.checkOut?.at &&
+            (displayStatus(row.record?.status) === "Absconder" ||
+              (earlyDepartureAt(row.record, policy) &&
+                !row.record?.earlyDepartureApproved))
           )
         : statusFilter === "On Time"
           ? rows.filter((row) => ["On Time", "Present"].includes(displayStatus(row.record?.status)))
           : statusFilter === "Missing"
             ? rows.filter((row) => !row.record?.checkIn)
             : statusFilter === "CheckedIn"
-              ? rows.filter((row) => row.record?.checkIn)
-              : statusFilter
-                ? rows.filter(
-                    (row) => row.record && row.record.status === statusFilter
-                  )
-                : rows;
+              ? rows.filter((row) => row.record?.checkIn && !row.record?.checkOut?.at)
+              : statusFilter === "CheckedOut"
+                ? rows.filter((row) => row.record?.checkOut?.at)
+                : statusFilter
+                  ? rows.filter(
+                      (row) => row.record && row.record.status === statusFilter
+                    )
+                  : rows;
+
+    // The register is a punch-order view: employees who clocked in earliest
+    // appear first. Employees without a check-in stay after punched rows.
+    filteredRows.sort((left, right) => {
+      const leftCheckIn = left.record?.checkIn?.at
+        ? new Date(left.record.checkIn.at).getTime()
+        : Number.POSITIVE_INFINITY;
+      const rightCheckIn = right.record?.checkIn?.at
+        ? new Date(right.record.checkIn.at).getTime()
+        : Number.POSITIVE_INFINITY;
+
+      if (leftCheckIn !== rightCheckIn) {
+        return leftCheckIn - rightCheckIn;
+      }
+
+      return String(left.employeeId).localeCompare(String(right.employeeId));
+    });
 
     const total = filteredRows.length;
 
     const summary = {
       roster: rows.length,
-      checkedIn: rows.filter((row) => row.record?.checkIn).length,
+      checkedIn: rows.filter((row) => row.record?.checkIn && !row.record?.checkOut?.at).length,
+      checkedOut: rows.filter((row) => row.record?.checkOut?.at).length,
       present: rows.filter((row) => ["On Time", "Present"].includes(displayStatus(row.record?.status))).length,
       late: rows.filter((row) => row.record?.status === "Late").length,
       absconders: rows.filter((row) => (earlyDepartureAt(row.record, policy) && !row.record?.earlyDepartureApproved) || displayStatus(row.record?.status) === "Absconder").length,

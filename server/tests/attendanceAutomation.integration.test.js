@@ -78,7 +78,7 @@ after(async () => {
   await disconnectTestDb();
 });
 
-test("scheduled run evaluates each company's own working-day boundary", async () => {
+test("the scheduled sweep checks off-site location only after the company shift end", async () => {
   process.env.CRON_SECRET = "attendance-secret-for-integration-test";
 
   const dar = await seedOrganisation({
@@ -95,6 +95,26 @@ test("scheduled run evaluates each company's own working-day boundary", async ()
     createdBy: dar.head._id,
   });
   await createOpenDay(darStaff.employee);
+  await Attendance.updateOne(
+    { employeeId: darStaff.employee._id },
+    { $set: { lastSeenInsideAt: ON_SITE_AT_1647 } }
+  );
+  await Attendance.updateOne(
+    { employeeId: darStaff.employee._id },
+    {
+      $set: {
+        lastSeen: {
+          at: new Date("2026-10-23T14:05:00.000Z"),
+          latitude: HEAD_OFFICE.latitude + 0.2,
+          longitude: HEAD_OFFICE.longitude,
+          accuracyMeters: 8,
+          distanceMeters: 12500,
+          locationName: "Nilric Head Office",
+          withinGeofence: false,
+        },
+      },
+    }
+  );
 
   const later = await seedOrganisation({
     name: "Later shift company",
@@ -110,9 +130,25 @@ test("scheduled run evaluates each company's own working-day boundary", async ()
     createdBy: later.head._id,
   });
   await createOpenDay(laterStaff.employee);
+  await Attendance.updateOne(
+    { employeeId: laterStaff.employee._id },
+    {
+      $set: {
+        lastSeen: {
+          at: new Date("2026-10-23T14:05:00.000Z"),
+          latitude: HEAD_OFFICE.latitude + 0.2,
+          longitude: HEAD_OFFICE.longitude,
+          accuracyMeters: 8,
+          distanceMeters: 12500,
+          locationName: "Nilric Head Office",
+          withinGeofence: false,
+        },
+      },
+    }
+  );
 
   const req = scheduledReq();
-  req.testNow = new Date("2026-10-23T13:49:00.000Z"); // 16:49 EAT
+  req.testNow = new Date("2026-10-23T14:05:00.000Z"); // 17:05 EAT
   const realDate = globalThis.Date;
   // Pin only the scheduled controller's now() call, without changing the
   // asynchronous DB driver's timers or any date calculations before it.
@@ -143,15 +179,17 @@ test("scheduled run evaluates each company's own working-day boundary", async ()
   const darRecord = await Attendance.findOne({ employeeId: darStaff.employee._id }).lean();
   const laterRecord = await Attendance.findOne({ employeeId: laterStaff.employee._id }).lean();
 
-  assert.ok(darRecord.autoClockOut.scheduledFor);
-  assert.equal(darRecord.autoClockOut.scheduledFor.toISOString(), AUTO_CLOSE_AT_1700.toISOString());
+  assert.equal(darRecord.checkOut.automatic, true);
+  assert.equal(darRecord.checkOut.at.toISOString(), ON_SITE_AT_1647.toISOString());
+  assert.equal(darRecord.status, "Absconder");
+  assert.equal(darRecord.workedMinutes, 527);
 
-  // The later company's confirmation check is 17:45, not 16:45, so this same
-  // UTC instant must not prematurely schedule its clock-out.
-  assert.equal(laterRecord.autoClockOut?.scheduledFor || null, null);
+  // The later company's workday ends at 18:00, so the 17:05 sweep does not
+  // close it even though its device has an off-site fix.
+  assert.equal(laterRecord.checkOut, null);
 });
 
-test("Saturday scheduled sweep queues a 13:00 auto close", async () => {
+test("Saturday sweep never auto-clocks out before 17:00", async () => {
   const company = await seedOrganisation({
     name: "Saturday schedule company",
     policy: {
@@ -178,11 +216,12 @@ test("Saturday scheduled sweep queues a 13:00 auto close", async () => {
       withinGeofence: true,
     },
     lastSeen: {
-      at: new Date("2026-10-24T09:45:00.000Z"),
-      latitude: HEAD_OFFICE.latitude,
+      at: new Date("2026-10-24T09:48:00.000Z"),
+      latitude: HEAD_OFFICE.latitude + 0.2,
       longitude: HEAD_OFFICE.longitude,
+      distanceMeters: 12500,
       locationName: "Nilric Head Office",
-      withinGeofence: true,
+      withinGeofence: false,
     },
     lastSeenInsideAt: new Date("2026-10-24T09:45:00.000Z"),
     lastSeenInside: {
@@ -202,8 +241,24 @@ test("Saturday scheduled sweep queues a 13:00 auto close", async () => {
   });
   const stored = await Attendance.findOne({ employeeId: staff.employee._id }).lean();
 
-  assert.equal(result.scheduled, 1);
-  assert.equal(stored.autoClockOut.scheduledFor.toISOString(), "2026-10-24T10:00:00.000Z");
+  assert.equal(result.scheduled, 0);
+  assert.equal(result.closed, 0);
+  assert.equal(stored.checkOut, null);
+
+  const afterFive = new Date("2026-10-24T14:05:00.000Z"); // 17:05 EAT
+  await Attendance.updateOne(
+    { employeeId: staff.employee._id },
+    { $set: { lastSeen: { ...stored.lastSeen, at: afterFive } } }
+  );
+  const afterFiveResult = await sweepCompanyDay({
+    companyId: company.company._id,
+    now: afterFive,
+  });
+  const closed = await Attendance.findOne({ employeeId: staff.employee._id }).lean();
+
+  assert.equal(afterFiveResult.closed, 1);
+  assert.equal(closed.checkOut.at.toISOString(), "2026-10-24T09:45:00.000Z");
+  assert.equal(closed.status, "Absconder");
 });
 
 test("Sunday sweep leaves any open record untouched", async () => {

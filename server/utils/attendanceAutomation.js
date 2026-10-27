@@ -5,22 +5,15 @@
 // (POST /api/attendance/heartbeat). These rules read the latest report and
 // decide whether a day that was never closed should be closed for the employee.
 //
-// Three checks run relative to the end of the working day, in the company's
-// timezone (17:00 in Dar es Salaam by default):
+// At or after the scheduled shift end (17:00 in Dar es Salaam by default),
+// close only when a fresh location confirms the device is outside the worksite.
+// Store the last on-site time as the checkout time, even though automation runs
+// after shift end. A device still inside the work area remains open for manual
+// clock-out. Leaving before the required scheduled hours makes the worker an
+// Absconder. Saturdays use their configured shift; Sundays are non-working.
 //
-//   15:30  early departure  weekday location check → remember the last
-//                           on-site time and queue close for 17:00.
-//   16:45  presence check   recent location confirms the day is still active.
-//   17:00  auto clock-out   close the days queued by either check.
-// Saturdays use the same offsets from 13:00 (11:30 / 12:45 / 13:00); Sundays
-// are non-working days.
-//
-// Field and remote staff work away from the office by definition, so they are
-// never closed early for being outside a fence. They close at their scheduled
-// end only after a recent presence check confirms the day was still active.
-//
-// Every decision returns the time the day should close at, not the time the
-// sweep happened to run, so a late sweep still records an honest 17:00.
+// Field and remote staff, or companies without an active fence, cannot be
+// confirmed as having left a worksite and are never auto-closed.
 
 import {
   DEFAULT_TIMEZONE,
@@ -31,11 +24,21 @@ import {
 } from "./geo.js";
 
 const MINUTE_MS = 60 * 1000;
+const REQUIRED_WORK_MINUTES = 9 * 60;
 
-// A fix is accepted for the presence check when it is at most this old at the
-// check time. The app reports every 5 minutes, so this absorbs a missed beat.
+// A fix must be recent and outside the fence when the after-shift sweep runs.
+// The app reports every 5 minutes, so allow missed beats up to 15m.
 const PRESENCE_TOLERANCE_MINUTES = 15;
+const isRecentAt = (at, reference) => {
+  if (!at) return false;
+  const timestamp = new Date(at).getTime();
+  const referenceTime = new Date(reference).getTime();
 
+  return (
+    timestamp <= referenceTime &&
+    referenceTime - timestamp <= PRESENCE_TOLERANCE_MINUTES * MINUTE_MS
+  );
+};
 
 const clampMinutes = (minutes) =>
   Math.min(Math.max(Math.round(Number(minutes) || 0), 0), 23 * 60 + 59);
@@ -54,20 +57,10 @@ const clockLabel = (date, timeZone) => {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
 
-// Turns the stored attendance policy into the three check times, so a company
-// that finishes at 18:00 gets checks at 16:30, 17:45 and 18:00.
+// Resolves company-local shift start/end times for the automatic sweep.
 export const resolveAutomationPolicy = (policy = {}) => {
   const timezone = policy.timezone || DEFAULT_TIMEZONE;
   const workEndMinutes = timeStringToMinutes(policy.workEnd, 17 * 60);
-  const earlyMinutes = Math.max(
-    0,
-    Number(policy.earlyDepartureCheckMinutes ?? 90) || 0
-  );
-  const confirmMinutes = Math.max(
-    0,
-    Number(policy.autoClockOutConfirmMinutes ?? 15) || 0
-  );
-
   const saturdayWorkEndMinutes = timeStringToMinutes(
     policy.saturdayWorkEnd,
     13 * 60
@@ -81,17 +74,10 @@ export const resolveAutomationPolicy = (policy = {}) => {
   return {
     enabled: policy.autoClockOut !== false,
     timezone,
+    workEnd: clockString(workEndMinutes),
     saturdayWorkStart,
     saturdayWorkEnd,
-    saturdayEarlyDepartureAt: clockString(
-      saturdayWorkEndMinutes - earlyMinutes
-    ),
-    saturdayConfirmAt: clockString(saturdayWorkEndMinutes - confirmMinutes),
     saturdayCloseAt: saturdayWorkEnd,
-    workEnd: clockString(workEndMinutes),
-    earlyDepartureAt: clockString(workEndMinutes - earlyMinutes),
-    confirmAt: clockString(workEndMinutes - confirmMinutes),
-    closeAt: clockString(workEndMinutes),
     requireGeofence: policy.requireGeofence !== false,
   };
 };
@@ -101,18 +87,15 @@ const isWorkModeFenced = (employee, rules, hasActiveLocations) =>
   (employee?.workMode || "Office") === "Office" &&
   hasActiveLocations;
 
-const departureTime = ({ lastSeenInsideAt, checkInAt, now }) => {
+const departureTime = ({ lastSeenInsideAt, checkInAt }) => {
   const inside =
     lastSeenInsideAt && lastSeenInsideAt > checkInAt ? lastSeenInsideAt : null;
-  const at = inside || checkInAt;
 
-  return at > now ? now : at;
+  return inside || checkInAt;
 };
 
 // Returns null when there is nothing to do, otherwise one of:
 //   { action: "clock-out", at, outcome, reason }
-//   { action: "schedule", scheduledFor, outcome, reason }
-//   { action: "note", outcome, reason }
 export const evaluateDay = ({
   record,
   employee,
@@ -135,15 +118,12 @@ export const evaluateDay = ({
   const date = record.date || localDateKey(now, rules.timezone);
   const [year, month, day] = date.split("-").map(Number);
   const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-  const workEnd = weekday === 6 ? rules.saturdayCloseAt : rules.workEnd;
-  const earlyDepartureAt =
-    weekday === 6 ? rules.saturdayEarlyDepartureAt : rules.earlyDepartureAt;
-  const confirmAt = weekday === 6 ? rules.saturdayConfirmAt : rules.confirmAt;
-  const earlyAt = zonedTimeToUtc(date, earlyDepartureAt, rules.timezone);
-  const confirmAtUtc = zonedTimeToUtc(date, confirmAt, rules.timezone);
+  const configuredEnd = weekday === 6 ? rules.saturdayCloseAt : rules.workEnd;
+  const workEnd =
+    timeStringToMinutes(configuredEnd) >= 17 * 60 ? configuredEnd : "17:00";
   const closeAt = zonedTimeToUtc(date, workEnd, rules.timezone);
 
-  if (weekday === 0 || !earlyAt || !confirmAtUtc || !closeAt) {
+  if (weekday === 0 || !closeAt) {
     return null;
   }
 
@@ -153,133 +133,61 @@ export const evaluateDay = ({
     ? new Date(record.lastSeenInsideAt)
     : null;
   const fenced = isWorkModeFenced(employee, rules, hasActiveLocations);
-  const scheduledFor = record.autoClockOut?.scheduledFor
-    ? new Date(record.autoClockOut.scheduledFor)
-    : null;
 
-  if (
-    scheduledFor &&
-    record.autoClockOut?.outcome === "left-premises" &&
-    last?.withinGeofence === true &&
-    new Date(last.at) > new Date(record.autoClockOut.evaluatedAt || 0)
-  ) {
-    return {
-      action: "cancel-schedule",
-      outcome: "returned-on-site",
-      reason: `Device returned to ${last.locationName || "the work location"} at ${clockLabel(last.at, rules.timezone)} before shift end.`,
-    };
-  }
-
-  // A queued day closes at its scheduled end, whether for an early departure
-  // or because presence at the confirmation check was verified.
-  if (scheduledFor) {
-    if (now < scheduledFor) {
-      return null;
-    }
-
-    return {
-      action: "clock-out",
-      at: scheduledFor,
-      outcome: record.autoClockOut?.outcome || "scheduled",
-      reason:
-        record.autoClockOut?.reason ||
-        `Device was on site at the ${confirmAt} check. Closed automatically at ${workEnd}.`,
-    };
-  }
-
-  // 2 · If the most recent fix is off-site and newer than the last on-site fix,
-  // remember that departure at the early check and queue the close. The outside
-  // fix may have arrived before this check; attendance stays open until shift end.
-  if (
-    fenced &&
-    now >= earlyAt &&
-    now < closeAt &&
-    last &&
-    new Date(last.at) > (lastSeenInsideAt || checkInAt) &&
-    last.withinGeofence === false
-  ) {
-    const estimatedDepartureAt = departureTime({
-      lastSeenInsideAt,
-      checkInAt,
-      now,
-    });
-
-    return {
-      action: "schedule",
-      scheduledFor: closeAt,
-      outcome: "left-premises",
-      reason: `Device left ${
-        last.locationName || "the work location"
-      } at ${clockLabel(last.at, rules.timezone)}. Last seen on site at ${clockLabel(
-        estimatedDepartureAt,
-        rules.timezone
-      )}; the day will close automatically at ${clockLabel(closeAt, rules.timezone)}.`,
-    };
-  }
-
-  if (now < confirmAtUtc) {
+  // Do not act before the shift boundary or infer a departure from a stale
+  // location report. Each scheduled sweep can close directly once the current
+  // device position confirms it remains outside the worksite.
+  if (now <= closeAt) {
     return null;
   }
 
-  // 3 · Presence check. Without a recent fix the system cannot tell whether
-  // the person is still at work or simply closed the app, so it does not guess.
-  const presenceAt = last ? new Date(last.at) : null;
-  const presenceVerified =
-    presenceAt &&
-    presenceAt >=
-      new Date(
-        confirmAtUtc.getTime() - PRESENCE_TOLERANCE_MINUTES * MINUTE_MS
-      );
+  if (!fenced) {
+    return null;
+  }
 
-  if (!presenceVerified) {
+  if (!last || last.withinGeofence !== false) {
+    return record.autoClockOut?.scheduledFor
+      ? {
+          action: "cancel-schedule",
+          outcome: "location-not-confirmed-outside",
+          reason: "Automatic clock-out canceled because the device is not currently confirmed outside a work location.",
+        }
+      : null;
+  }
+
+  if (!isRecentAt(last.at, now)) {
     return {
       action: "note",
       outcome: "no-location",
-      reason: `No location arrived from the device around ${confirmAt}, so the day was left open for review.`,
+      reason: `No recent off-site location was available after ${workEnd}; the day was left open for review.`,
     };
   }
 
-  if (!fenced || last.withinGeofence) {
-    return {
-      action: "schedule",
-      scheduledFor: closeAt,
-      outcome: "scheduled",
-      reason: `Device on site at the ${confirmAt} check. The day closes automatically at ${workEnd}.`,
-    };
-  }
-
-  const estimatedDepartureAt = departureTime({
-    lastSeenInsideAt,
-    checkInAt,
-    now,
-  });
+  const checkoutAt = departureTime({ lastSeenInsideAt, checkInAt });
+  const reason = `Device was confirmed outside ${
+    last.locationName || "the work location"
+  } after last being seen on site at ${clockLabel(
+    checkoutAt,
+    rules.timezone
+  )}. Automatic checkout was registered after ${workEnd}.`;
 
   return {
-    action: "schedule",
-    scheduledFor: closeAt,
+    action: "clock-out",
+    at: checkoutAt,
     outcome: "left-premises",
-    reason: `Device left ${
-      last.locationName || "the work location"
-    } at ${clockLabel(last.at, rules.timezone)}. Last seen on site at ${clockLabel(
-      estimatedDepartureAt,
-      rules.timezone
-    )}; the day will close automatically at ${clockLabel(closeAt, rules.timezone)}.`,
+    reason,
   };
 };
 
 // Worked minutes and status for a day the server closes itself, matching what
 // a manual clock-out would have recorded.
-export const closingSummary = ({
-  record,
-  at,
-  earlyDeparture = false,
-}) => {
+export const closingSummary = ({ record, at }) => {
   const checkInAt = new Date(record.checkIn.at);
   const workedMinutes = Math.max(
     0,
     Math.round((new Date(at).getTime() - checkInAt.getTime()) / 60000)
   );
-  const isEarlyDeparture = Boolean(earlyDeparture);
+  const isEarlyDeparture = workedMinutes < REQUIRED_WORK_MINUTES;
   const status =
     isEarlyDeparture && !record.earlyDepartureApproved
       ? "Absconder"

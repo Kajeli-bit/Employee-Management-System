@@ -86,29 +86,18 @@ graceMinutes    15
 halfDayMinutes  240
 requireGeofence true
 timezone        Africa/Dar_es_Salaam
-autoClockOut    true   (weekdays: 15:30 / 16:45 / 17:00; Saturday: 11:30 / 12:45 / 13:00)
+autoClockOut    true   (automatic checkout only after 17:00 and a fresh off-site location fix)
 ```
 
 **Seeded head office** — `Nilric Head Office`, Plot 163/129, Apartment 107, Samora Avenue, Dar es Salaam at approximately `-6.8167, 39.2889`, radius 250 m. Replace the pin with the exact office coordinates from the Work locations screen ("Use my current location" while standing at the gate).
 
 **Regularization** — managers with `attendance.manage` can set clock-in/out times, status and a reason for any employee they manage. The record is tagged `Manual` and stores who corrected it.
 
-**Automatic clock-out** — a forgotten clock-out is resolved at the scheduled end of the working day. The system checks the most recent GPS heartbeat and the separately stored last on-site time (all in company-local time):
+**Automatic clock-out** — while an attendance day is open, the employee app reports location every few minutes. If an office employee leaves the work site before the scheduled end and a recent GPS heartbeat (no more than 15 minutes old) confirms the device is still outside after that time, the system clocks them out using the last confirmed on-site time and location, not the later time the sweep ran. If no later on-site fix exists, checkout falls back to check-in. A checkout with fewer than nine worked hours is marked **Absconder**, unless an early departure was approved.
 
-| Check | What it does |
-| --- | --- |
-| 15:30 — early departure (weekdays) | If an office worker's latest location is outside all active sites, the system stores the latest inside-site timestamp/location as the estimated departure, but leaves attendance open until 17:00. |
-| 16:45 — presence check (weekdays) | If a recent location is available, the record is queued for 17:00. If no recent position arrived, the record stays open for review instead of guessing. |
-| 17:00 — close (weekdays) | Queued records are automatically clocked out at 17:00. Early departures retain the actual last-seen-on-site time in the automatic clock-out reason and audit trail. |
-| 11:30 — early departure (Saturday) | A location outside all active sites queues an automatic close at 13:00 while preserving the last on-site time/location. |
-| 12:45 — presence check (Saturday) | A recent location queues a close at 13:00. No recent position leaves the record open for review. |
-| 13:00 — close (Saturday) | Queued Saturday attendance is closed at 13:00. Sundays are non-working days and are skipped by the scheduled attendance sweep. |
+If the device remains on site, the day stays open for manual checkout. If no recent position confirms the employee has left, the system leaves the day open for review. Field and remote employees, or companies without an active work-site fence, are not automatically closed based on location. Sunday is a non-working day: check-ins are rejected and automatic sweeps skip the day.
 
-How it gets a position: while a day is open, the employee app posts its position to `POST /api/attendance/heartbeat` every five minutes. A browser can only read a location while the page is open and permission has been granted, so a closed tab or laptop lid means no new reading; a day without enough recent evidence is left open for review. The system preserves the latest location and separately tracks the full last fix inside a worksite. For example, a worker who leaves at 15:20 may be automatically clocked out at 17:00; the checkout record carries the last on-site GPS fix/time, and the reason states that 15:20 was the last time seen inside. If the device reports back inside the worksite before the close, the early-departure queue is canceled and the scheduled-end presence check decides whether to close the day.
-
-Field and remote staff are never closed early for being away from the office. With recent location evidence, their open attendance is closed at the scheduled end: 17:00 on weekdays or 13:00 Saturday. Sundays are non-working days.
-
-The weekday times derive from `workEnd`, so a company finishing at 18:00 checks at 16:30, 17:45 and 18:00. Saturday defaults are `saturdayWorkStart` 09:00 and `saturdayWorkEnd` 13:00; attendance policy fields `earlyDepartureCheckMinutes` (default 90) and `autoClockOutConfirmMinutes` (default 15) apply relative to that day's end as well. MD or HR can edit the Saturday hours on Work locations → Attendance policy. Sunday clock-in is rejected and automatic sweeps do not process Sunday records.
+The automatic clock-out check runs after the scheduled end, with 17:00 as the minimum on both weekdays and Saturday. This means Saturday attendance may remain open after the scheduled 13:00 shift end, and a weekday configured to finish later (for example, 18:00) is not checked before that later end time. MD or HR can edit scheduled hours on Work locations → Attendance policy.
 
 **Scheduling** — every heartbeat also runs the check for that company, so an open employee app keeps the schedule moving. For days when nobody has the app open, the same check runs from a scheduler: set `CRON_SECRET` on the server, then either let the included GitHub Actions workflow call `GET /api/cron/attendance` every ten minutes (set the `ATTENDANCE_SWEEP_URL` repository variable to `https://<your-domain>/api/cron/attendance` and `ATTENDANCE_CRON_SECRET` to the same secret), or point any cron service at that URL with the same header. Vercel's own cron jobs are limited to once a day on the Hobby plan, which is why the schedule is not in `vercel.json`.
 
@@ -130,9 +119,9 @@ Everything else lives on the profile, which HR fills in from **Employees → ope
 ## Recent workspace and attendance updates
 
 - The worker portal uses the available page width, with account settings and sign-out in its sidebar on desktop and mobile; the management-console layout is unchanged.
-- Attendance heartbeats preserve the latest position and full last on-site GPS fix. An office employee who leaves early remains clocked in until 17:00 on weekdays or 13:00 on Saturday; the recorded checkout carries the last on-site time/location for audit.
+- Attendance heartbeats preserve the latest position and full last on-site GPS fix. Automatic checkout waits until after the scheduled end and never runs before 17:00, including Saturday. It requires a recent off-site position and records the last on-site time/location; less than nine hours worked is marked Absconder unless approved.
 - Standard hours are 08:00–17:00 Monday–Friday and 09:00–13:00 Saturday. Sunday is a non-working day: check-ins are rejected and automatic sweeps are skipped.
-- See [GPS attendance](#gps-attendance) for early-departure confirmation, automatic close, and scheduler behavior.
+- See [GPS attendance](#gps-attendance) for location requirements, automatic close timing, and scheduler behavior.
 
 ## Employee profile fields
 

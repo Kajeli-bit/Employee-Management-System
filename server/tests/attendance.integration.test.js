@@ -244,19 +244,45 @@ test("an early clock-out is marked as an absconder", async () => {
 
   await clockIn(user);
 
-  // Move the punch to an hour ago so the worked minutes are deterministic.
+  const currentTime = new Date();
+  const policy = getPolicy(
+    await Company.findById(company._id).select("attendance").lean()
+  );
+  const date = localDateKey(currentTime, policy.timezone);
+  const earlyCheckOut = zonedTimeToUtc(date, "10:00", policy.timezone);
+  const realDate = globalThis.Date;
+  globalThis.Date = class extends realDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super(earlyCheckOut);
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return earlyCheckOut.getTime();
+    }
+  };
+
+  // Move the punch to an hour before the mocked clock-out time so worked
+  // minutes stay deterministic and the departure is clearly before shift end.
   await Attendance.updateOne(
     { employeeId: employee._id },
     {
       $set: {
-        "checkIn.at": new Date(Date.now() - 60 * 60 * 1000),
+        "checkIn.at": zonedTimeToUtc(date, "09:00", policy.timezone),
         status: "Present",
         lateByMinutes: 0,
       },
     }
   );
 
-  const res = await clockOut(user);
+  let res;
+  try {
+    res = await clockOut(user);
+  } finally {
+    globalThis.Date = realDate;
+  }
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.record.status, "Absconder");
@@ -451,6 +477,182 @@ test("HR sees every department and can narrow the register by query", async () =
     filtered.body.rows.map((row) => row.name),
     ["Operations Officer"]
   );
+});
+
+test("the attendance register orders clock-ins from earliest to latest across pages", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const hr = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    role: "hr",
+  });
+  const early = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    name: "Early Arrival",
+    employeeId: "EMP-ORDER-1",
+  });
+  const late = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    name: "Late Arrival",
+    employeeId: "EMP-ORDER-2",
+  });
+  const missing = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    name: "No Punch",
+    employeeId: "EMP-ORDER-3",
+  });
+  const date = localDateKey(new Date());
+
+  await Attendance.create([
+    {
+      companyId: company._id,
+      employeeId: late.employee._id,
+      userId: late.user._id,
+      date,
+      checkIn: { at: new Date("2026-10-23T06:00:00.000Z") },
+      status: "On Time",
+    },
+    {
+      companyId: company._id,
+      employeeId: early.employee._id,
+      userId: early.user._id,
+      date,
+      checkIn: { at: new Date("2026-10-23T04:00:00.000Z") },
+      status: "On Time",
+    },
+  ]);
+
+  const firstPage = await call(getAttendance, {
+    user: hr.user,
+    query: { date, limit: 2, page: 1 },
+  });
+  const secondPage = await call(getAttendance, {
+    user: hr.user,
+    query: { date, limit: 2, page: 2 },
+  });
+  const thirdPage = await call(getAttendance, {
+    user: hr.user,
+    query: { date, limit: 2, page: 3 },
+  });
+
+  assert.equal(firstPage.statusCode, 200);
+  assert.deepEqual(
+    firstPage.body.rows.map((row) => row.name),
+    ["Early Arrival", "Late Arrival"]
+  );
+  assert.ok(secondPage.body.rows.some((row) => row.name === "No Punch"));
+  assert.ok(
+    [...secondPage.body.rows, ...thirdPage.body.rows].every(
+      (row) => !row.record?.checkIn?.at
+    ),
+    "employees without a punch should follow every employee who clocked in"
+  );
+});
+
+test("the admin register exposes and filters the checked-out state", async () => {
+  const { company, finance, head } = await seedOrganisation();
+  const hr = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    role: "hr",
+    name: "HR Manager",
+  });
+  const checkedOut = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    name: "Checked Out Employee",
+  });
+  const checkedIn = await makeStaff({
+    companyId: company._id,
+    department: finance._id,
+    createdBy: head._id,
+    name: "Still Working Employee",
+  });
+
+  const date = localDateKey(new Date());
+  const attendancePolicy = getPolicy(
+    await Company.findById(company._id).select("attendance").lean()
+  );
+  const shiftEnd = zonedTimeToUtc(
+    date,
+    attendancePolicy.workEnd,
+    attendancePolicy.timezone
+  );
+  const checkedOutAt = new Date(shiftEnd.getTime() + 60 * 60 * 1000);
+  await Attendance.create([
+    {
+      companyId: company._id,
+      employeeId: checkedOut.employee._id,
+      userId: checkedOut.user._id,
+      date,
+      checkIn: { at: new Date("2026-10-23T05:00:00.000Z") },
+      checkOut: { at: checkedOutAt },
+      status: "On Time",
+    },
+    {
+      companyId: company._id,
+      employeeId: checkedIn.employee._id,
+      userId: checkedIn.user._id,
+      date,
+      checkIn: { at: new Date("2026-10-23T05:00:00.000Z") },
+      status: "On Time",
+    },
+  ]);
+
+  const all = await call(getAttendance, { user: hr.user, query: { date } });
+  const checkedOutRow = all.body.rows.find(
+    (row) => row.employeeId.toString() === checkedOut.employee._id.toString()
+  );
+  const checkedInRow = all.body.rows.find(
+    (row) => row.employeeId.toString() === checkedIn.employee._id.toString()
+  );
+
+  assert.equal(checkedOutRow.record.status, "On Time");
+  assert.equal(checkedOutRow.record.checkInStatus, "On Time");
+  assert.equal(checkedOutRow.record.checkOutStatus, "Checked Out");
+  assert.equal(checkedInRow.record.status, "On Time");
+  assert.equal(checkedInRow.record.checkInStatus, "On Time");
+  assert.equal(checkedInRow.record.checkOutStatus, "");
+  assert.equal(all.body.summary.checkedOut, 1);
+
+  const filtered = await call(getAttendance, {
+    user: hr.user,
+    query: { date, status: "CheckedOut" },
+  });
+
+  assert.deepEqual(filtered.body.rows.map((row) => row.name), ["Checked Out Employee"]);
+
+  const earlyDepartureAt = zonedTimeToUtc(date, "16:00", attendancePolicy.timezone);
+  await Attendance.updateOne(
+    { employeeId: checkedOut.employee._id, date },
+    {
+      $set: {
+        "checkOut.at": earlyDepartureAt,
+        earlyDeparture: true,
+        status: "Absconder",
+      },
+    }
+  );
+
+  const absconderRegister = await call(getAttendance, {
+    user: hr.user,
+    query: { date },
+  });
+  const absconderRow = absconderRegister.body.rows.find(
+    (row) => row.employeeId.toString() === checkedOut.employee._id.toString()
+  );
+
+  assert.equal(absconderRow.record.checkInStatus, "On Time");
+  assert.equal(absconderRow.record.checkOutStatus, "Absconder");
 });
 
 test("staff cannot read the company register", async () => {

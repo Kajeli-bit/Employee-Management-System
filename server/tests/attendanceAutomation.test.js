@@ -37,6 +37,7 @@ const AT_1650 = new Date("2026-10-23T13:50:00.000Z");
 const AT_1705 = new Date("2026-10-23T14:05:00.000Z");
 const AT_1535 = new Date("2026-10-23T12:35:00.000Z");
 const AT_1530 = new Date("2026-10-23T12:30:00.000Z");
+const AT_1555 = new Date("2026-10-23T12:55:00.000Z");
 const CHECK_IN = new Date("2026-10-23T05:00:00.000Z"); // 08:00 local
 
 const POLICY = {
@@ -74,21 +75,19 @@ const openRecord = ({ lastSeen = null, lastSeenInsideAt = null, autoClockOut = {
   autoClockOut,
 });
 
-test("a company finishing at 17:00 checks at 15:30, 16:45 and 17:00", () => {
+test("a weekday automatic checkout boundary is 17:00", () => {
   const rules = resolveAutomationPolicy(POLICY);
 
-  assert.equal(rules.earlyDepartureAt, "15:30");
-  assert.equal(rules.confirmAt, "16:45");
-  assert.equal(rules.closeAt, "17:00");
+  assert.equal(rules.workEnd, "17:00");
   assert.equal(rules.enabled, true);
 });
 
-test("an early automatic departure is an absconder unless explicitly approved", () => {
+test("an automatic checkout under nine hours is an absconder unless approved", () => {
   const record = openRecord({ status: "On Time" });
-  const at = new Date("2026-10-23T14:00:00.000Z");
+  const at = new Date("2026-10-23T12:00:00.000Z"); // 15:00 EAT, seven hours
 
-  assert.deepEqual(closingSummary({ record, at, earlyDeparture: true }), {
-    workedMinutes: 540,
+  assert.deepEqual(closingSummary({ record, at }), {
+    workedMinutes: 420,
     status: "Absconder",
     earlyDeparture: true,
   });
@@ -96,9 +95,8 @@ test("an early automatic departure is an absconder unless explicitly approved", 
     closingSummary({
       record: { ...record, earlyDepartureApproved: true },
       at,
-      earlyDeparture: true,
     }),
-    { workedMinutes: 540, status: "On Time", earlyDeparture: true }
+    { workedMinutes: 420, status: "On Time", earlyDeparture: true }
   );
 });
 
@@ -120,79 +118,71 @@ test("a full scheduled close keeps the existing punctuality status", () => {
   });
 });
 
-test("a later finish shifts the checks with it", () => {
+test("a company shift ending after 17:00 keeps its later checkout boundary", () => {
   const rules = resolveAutomationPolicy({ ...POLICY, workEnd: "18:00" });
 
-  assert.equal(rules.earlyDepartureAt, "16:30");
-  assert.equal(rules.confirmAt, "17:45");
-  assert.equal(rules.closeAt, "18:00");
+  assert.equal(rules.workEnd, "18:00");
 });
 
-test("nothing happens before the first check", () => {
+test("the automatic checkout does not run before 17:00 even after an off-site heartbeat", () => {
   const decision = evaluateDay({
-    record: openRecord({ lastSeen: seen({ at: AT_1535, withinGeofence: false }) }),
+    record: openRecord({
+      lastSeen: seen({ at: AT_1600, withinGeofence: false }),
+      lastSeenInsideAt: AT_1530,
+    }),
     employee: officeWorker,
     policy: POLICY,
-    now: new Date("2026-10-23T12:00:00.000Z"), // 15:00 local
+    now: AT_1650,
   });
 
   assert.equal(decision, null);
 });
 
-test("an earlier off-site heartbeat is handled at the early-departure check", () => {
-  const lastInsideAt = new Date("2026-10-23T10:00:00.000Z");
-  const outsideAt = new Date("2026-10-23T10:05:00.000Z");
+test("a stale off-site heartbeat is not enough to checkout after 17:00", () => {
   const decision = evaluateDay({
     record: openRecord({
-      lastSeen: seen({ at: outsideAt, withinGeofence: false }),
-      lastSeenInsideAt: lastInsideAt,
-    }),
-    employee: officeWorker,
-    policy: POLICY,
-    now: AT_1530,
-  });
-
-  assert.equal(decision.action, "schedule");
-  assert.equal(decision.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
-  assert.match(decision.reason, /last seen on site at 13:00/i);
-});
-
-test("leaving the premises after 15:30 queues a close at 17:00 and records the last on-site time", () => {
-  const decision = evaluateDay({
-    record: openRecord({
-      lastSeen: seen({ at: AT_1535, withinGeofence: false }),
+      lastSeen: seen({ at: new Date("2026-10-23T13:30:00.000Z"), withinGeofence: false }),
       lastSeenInsideAt: AT_1530,
     }),
     employee: officeWorker,
     policy: POLICY,
-    now: AT_1600,
+    now: AT_1705,
   });
 
-  assert.equal(decision.action, "schedule");
-  assert.equal(decision.outcome, "left-premises");
-  assert.equal(decision.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
-  assert.match(decision.reason, /last seen on site at 15:30/i);
+  assert.equal(decision.action, "note");
+  assert.equal(decision.outcome, "no-location");
 });
 
-test("a long tracking gap falls back to the first off-site reading", () => {
+test("after 17:00 an off-site device closes at its last on-site time", () => {
   const decision = evaluateDay({
     record: openRecord({
-      // The device only reported at 09:00 and then once more from 12 km away.
-      lastSeen: seen({ at: AT_1600, withinGeofence: false }),
-      lastSeenInsideAt: new Date("2026-10-23T06:00:00.000Z"),
-      lastSeenInside: seen({
-        at: new Date("2026-10-23T06:00:00.000Z"),
-        withinGeofence: true,
-      }),
+      lastSeen: seen({ at: AT_1705, withinGeofence: false }),
+      lastSeenInsideAt: AT_1530,
     }),
     employee: officeWorker,
     policy: POLICY,
-    now: new Date("2026-10-23T13:10:00.000Z"),
+    now: AT_1705,
   });
 
-  assert.equal(decision.action, "schedule");
-  assert.equal(decision.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
-  assert.match(decision.reason, /last seen on site at 09:00/i);
+  assert.equal(decision.action, "clock-out");
+  assert.equal(decision.outcome, "left-premises");
+  assert.equal(decision.at.toISOString(), AT_1530.toISOString());
+  assert.match(decision.reason, /registered after 17:00/i);
+  assert.match(decision.reason, /last being seen on site at 15:30/i);
+});
+
+test("when no later on-site heartbeat exists, checkout falls back to clock-in time", () => {
+  const decision = evaluateDay({
+    record: openRecord({
+      lastSeen: seen({ at: AT_1705, withinGeofence: false }),
+    }),
+    employee: officeWorker,
+    policy: POLICY,
+    now: AT_1705,
+  });
+
+  assert.equal(decision.action, "clock-out");
+  assert.equal(decision.at.toISOString(), CHECK_IN.toISOString());
 });
 
 test("still on site at 16:00 keeps the day open", () => {
@@ -216,62 +206,57 @@ test("Saturday policy resolves to 09:00–13:00", () => {
   assert.equal(rules.saturdayWorkEnd, "13:00");
 });
 
-test("Saturday automation uses the 09:00–13:00 workday", () => {
-  const saturdayRecord = {
-    ...openRecord({
-      lastSeen: seen({ at: new Date("2026-10-24T09:00:00.000Z"), withinGeofence: false }),
-      lastSeenInsideAt: new Date("2026-10-24T08:55:00.000Z"),
-    }),
-    date: "2026-10-24",
-  };
+test("Saturday automatic checkout still waits until after 17:00", () => {
+  const lastInsideAt = new Date("2026-10-24T09:50:00.000Z"); // 12:50 EAT
+  const afterFive = new Date("2026-10-24T14:05:00.000Z"); // 17:05 EAT
   const decision = evaluateDay({
-    record: saturdayRecord,
+    record: {
+      ...openRecord({
+        lastSeen: seen({ at: afterFive, withinGeofence: false }),
+        lastSeenInsideAt: lastInsideAt,
+      }),
+      date: "2026-10-24",
+    },
     employee: officeWorker,
     policy: POLICY,
-    now: new Date("2026-10-24T09:10:00.000Z"), // 12:10 EAT
+    now: afterFive,
   });
 
-  assert.equal(decision.action, "schedule");
-  assert.equal(decision.scheduledFor.toISOString(), "2026-10-24T10:00:00.000Z");
-  assert.match(decision.reason, /last seen on site at 11:55/i);
-  assert.match(decision.reason, /13:00/);
+  assert.equal(decision.action, "clock-out");
+  assert.equal(decision.at.toISOString(), lastInsideAt.toISOString());
+  assert.match(decision.reason, /after 17:00/);
 });
 
-test("the automatic policy uses the last inside fix as the departure audit position", () => {
-  const outside = seen({ at: AT_1535, withinGeofence: false });
-  const decision = evaluateDay({
-    record: openRecord({
-      lastSeen: outside,
-      lastSeenInsideAt: AT_1530,
-      lastSeenInside: seen({ at: AT_1530 }),
-    }),
-    employee: officeWorker,
-    policy: POLICY,
-    now: AT_1600,
-  });
+test("completed nine hours is not an absconder, but one minute under is", () => {
+  const record = openRecord();
+  const atNineHours = new Date("2026-10-23T14:00:00.000Z");
+  const oneMinuteShort = new Date(atNineHours.getTime() - 60 * 1000);
 
-  assert.equal(decision.outcome, "left-premises");
-  assert.match(decision.reason, /last seen on site at 15:30/i);
+  assert.deepEqual(closingSummary({ record, at: atNineHours }), {
+    workedMinutes: 540,
+    status: "On Time",
+    earlyDeparture: false,
+  });
+  assert.deepEqual(closingSummary({ record, at: oneMinuteShort }), {
+    workedMinutes: 539,
+    status: "Absconder",
+    earlyDeparture: true,
+  });
 });
 
-test("a fresh on-site location cancels a queued early departure", () => {
-  const returnedAt = new Date("2026-10-23T13:05:00.000Z");
+test("a fresh on-site location after 17:00 never triggers automatic checkout", () => {
+  const lastSeen = new Date("2026-10-23T14:05:00.000Z");
   const decision = evaluateDay({
     record: openRecord({
-      lastSeen: seen({ at: returnedAt, withinGeofence: true }),
-      autoClockOut: {
-        scheduledFor: new Date("2026-10-23T14:00:00.000Z"),
-        outcome: "left-premises",
-        evaluatedAt: new Date("2026-10-23T13:00:00.000Z"),
-      },
+      lastSeen: seen({ at: lastSeen, withinGeofence: true }),
+      lastSeenInsideAt: lastSeen,
     }),
     employee: officeWorker,
     policy: POLICY,
-    now: returnedAt,
+    now: lastSeen,
   });
 
-  assert.equal(decision.action, "cancel-schedule");
-  assert.equal(decision.outcome, "returned-on-site");
+  assert.equal(decision, null);
 });
 
 test("Sunday is not a working day for automatic clock-out", () => {
@@ -293,47 +278,35 @@ test("Sunday is not a working day for automatic clock-out", () => {
   );
 });
 
-test("on site at the 16:45 check schedules the 17:00 close", () => {
+test("an on-site device remains open after 17:00", () => {
+  const afterFive = new Date("2026-10-23T14:05:00.000Z");
   const decision = evaluateDay({
     record: openRecord({
-      lastSeen: seen({ at: new Date("2026-10-23T13:48:00.000Z") }),
-      lastSeenInsideAt: new Date("2026-10-23T13:48:00.000Z"),
+      lastSeen: seen({ at: afterFive }),
+      lastSeenInsideAt: afterFive,
     }),
     employee: officeWorker,
     policy: POLICY,
-    now: AT_1650,
+    now: afterFive,
   });
 
-  assert.equal(decision.action, "schedule");
-  assert.equal(decision.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
+  assert.equal(decision, null);
 });
 
-test("a scheduled day closes at 17:00 even when the sweep runs late", () => {
+test("a no-location decision does not guess an automatic checkout after 17:00", () => {
   const decision = evaluateDay({
-    record: openRecord({
-      lastSeen: seen({ at: new Date("2026-10-23T13:48:00.000Z") }),
-      autoClockOut: { scheduledFor: new Date("2026-10-23T14:00:00.000Z") },
-    }),
+    record: openRecord({ lastSeen: seen({ at: AT_1705, withinGeofence: true }) }),
     employee: officeWorker,
     policy: POLICY,
-    now: new Date("2026-10-23T15:30:00.000Z"), // 18:30 local, sweep was late
+    now: AT_1705,
   });
 
-  assert.equal(decision.action, "clock-out");
-  assert.equal(decision.at.toISOString(), "2026-10-23T14:00:00.000Z");
+  assert.equal(decision, null);
 });
 
-test("no location at the presence check leaves the day for review", () => {
-  const decision = evaluateDay({
-    record: openRecord(),
-    employee: officeWorker,
-    policy: POLICY,
-    now: AT_1650,
-  });
 
-  assert.equal(decision.action, "note");
-  assert.equal(decision.outcome, "no-location");
-});
+
+
 
 test("field staff are never closed early for being away from the office", () => {
   const record = openRecord({
@@ -354,7 +327,7 @@ test("field staff are never closed early for being away from the office", () => 
     now: AT_1650,
   });
 
-  assert.equal(confirmed.action, "schedule");
+  assert.equal(confirmed, null);
 });
 
 test("an already closed day is never touched", () => {
@@ -536,7 +509,7 @@ test("a heartbeat outside a working day stores nothing", async () => {
   assert.equal(await Attendance.countDocuments({}), 0);
 });
 
-test("the sweep queues an early departure and leaves the record open until 17:00", async () => {
+test("the after-17:00 sweep records the last on-site time and absconder status", async () => {
   const { company, finance, head } = await seedOrganisation({ policy: POLICY });
   const { employee } = await makeStaff({
     companyId: company._id,
@@ -545,40 +518,31 @@ test("the sweep queues an early departure and leaves the record open until 17:00
   });
 
   await startDay(employee, {
-    lastSeen: seen({ at: AT_1535, withinGeofence: false }),
+    lastSeen: seen({ at: AT_1705, withinGeofence: false }),
     lastSeenInsideAt: AT_1530,
   });
 
   const summary = await sweepCompanyDay({
     companyId: company._id,
-    now: AT_1600,
+    now: AT_1705,
   });
 
   assert.equal(summary.checked, 1);
-  assert.equal(summary.closed, 0);
-  assert.equal(summary.scheduled, 1);
-
-  const queued = await storedRecord(employee);
-
-  assert.equal(queued.checkOut, null);
-  assert.equal(queued.autoClockOut.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
-  assert.match(queued.autoClockOut.reason, /last seen on site at 15:30/i);
-
-  const closedSummary = await sweepCompanyDay({ companyId: company._id, now: AT_1705 });
-  assert.equal(closedSummary.closed, 1);
+  assert.equal(summary.closed, 1);
+  assert.equal(summary.scheduled, 0);
 
   const stored = await storedRecord(employee);
   assert.equal(stored.checkOut.automatic, true);
-  assert.equal(stored.checkOut.at.toISOString(), "2026-10-23T14:00:00.000Z");
+  assert.equal(stored.checkOut.at.toISOString(), AT_1530.toISOString());
   assert.equal(stored.checkOut.withinGeofence, true);
   assert.equal(stored.checkOut.locationName, "Nilric Head Office");
-  assert.match(stored.checkOut.reason, /last seen on site at 15:30/i);
-  assert.equal(stored.workedMinutes, 540);
+  assert.match(stored.checkOut.reason, /registered after 17:00/i);
+  assert.equal(stored.workedMinutes, 450);
   assert.equal(stored.status, "Absconder");
   assert.equal(stored.earlyDeparture, true);
 });
 
-test("the sweep leaves an on-site employee open and closes them at 17:00", async () => {
+test("the sweep never auto-closes an employee whose latest fix is on site", async () => {
   const { company, finance, head } = await seedOrganisation({ policy: POLICY });
   const { employee } = await makeStaff({
     companyId: company._id,
@@ -594,22 +558,17 @@ test("the sweep leaves an on-site employee open and closes them at 17:00", async
   const first = await sweepCompanyDay({ companyId: company._id, now: AT_1650 });
 
   assert.equal(first.closed, 0);
-  assert.equal(first.scheduled, 1);
+  assert.equal(first.scheduled, 0);
 
   const open = await storedRecord(employee);
-
   assert.equal(open.checkOut, null);
-  assert.equal(open.autoClockOut.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
+  assert.equal(open.autoClockOut.scheduledFor, null);
 
   const second = await sweepCompanyDay({ companyId: company._id, now: AT_1705 });
 
-  assert.equal(second.closed, 1);
-
-  const stored = await storedRecord(employee);
-
-  assert.equal(stored.checkOut.automatic, true);
-  assert.equal(stored.checkOut.at.toISOString(), "2026-10-23T14:00:00.000Z");
-  assert.equal(stored.workedMinutes, 540);
+  assert.equal(second.closed, 0);
+  const stillOpen = await storedRecord(employee);
+  assert.equal(stillOpen.checkOut, null);
 });
 
 test("running the sweep twice never closes a day twice", async () => {
@@ -621,17 +580,16 @@ test("running the sweep twice never closes a day twice", async () => {
   });
 
   await startDay(employee, {
-    lastSeen: seen({ at: AT_1535, withinGeofence: false }),
+    lastSeen: seen({ at: AT_1705, withinGeofence: false }),
     lastSeenInsideAt: AT_1530,
   });
 
-  await sweepCompanyDay({ companyId: company._id, now: AT_1600 });
-  await sweepCompanyDay({ companyId: company._id, now: AT_1600 });
+  await sweepCompanyDay({ companyId: company._id, now: AT_1705 });
   await sweepCompanyDay({ companyId: company._id, now: AT_1705 });
 
   const stored = await storedRecord(employee);
 
-  assert.equal(stored.checkOut.at.toISOString(), "2026-10-23T14:00:00.000Z");
+  assert.equal(stored.checkOut.at.toISOString(), AT_1530.toISOString());
 
   const count = await Attendance.countDocuments({ employeeId: employee._id });
 
@@ -709,7 +667,7 @@ test("the scheduled entry point refuses to run without its secret", async () => 
   }
 });
 
-test("a whole forgotten day closes at 17:00, not when the sweep happens to run", async () => {
+test("a whole day with recent on-site presence stays open for manual checkout", async () => {
   const { company, finance, head } = await seedOrganisation({ policy: POLICY });
   const { employee } = await makeStaff({
     companyId: company._id,
@@ -733,34 +691,21 @@ test("a whole forgotten day closes at 17:00, not when the sweep happens to run",
 
   assert.equal((await storedRecord(employee)).checkOut, null);
 
-  // 16:47 — the presence check queues the close.
+  // 16:47 — a recent on-site position means the employee is still at work.
   await sweepCompanyDay({ companyId: company._id, now: lastOnSite });
 
-  const queued = await storedRecord(employee);
+  const stillAtWork = await storedRecord(employee);
+  assert.equal(stillAtWork.checkOut, null);
+  assert.equal(stillAtWork.autoClockOut.scheduledFor, null);
 
-  assert.equal(queued.checkOut, null);
-  assert.equal(queued.autoClockOut.scheduledFor.toISOString(), "2026-10-23T14:00:00.000Z");
-
-  // 16:59 — still open, the employee could still clock out themselves.
-  await sweepCompanyDay({
-    companyId: company._id,
-    now: new Date("2026-10-23T13:59:00.000Z"),
-  });
-
-  assert.equal((await storedRecord(employee)).checkOut, null);
-
-  // 17:00:30 — a sweep a fraction late still records 17:00.
+  // Even after shift end, the system does not infer a departure from time alone.
   await sweepCompanyDay({
     companyId: company._id,
     now: new Date("2026-10-23T14:00:30.000Z"),
   });
 
   const stored = await storedRecord(employee);
-
-  assert.equal(stored.checkOut.automatic, true);
-  assert.equal(stored.checkOut.at.toISOString(), "2026-10-23T14:00:00.000Z");
-  assert.equal(stored.workedMinutes, 540);
-  assert.match(stored.checkOut.reason, /on site/i);
+  assert.equal(stored.checkOut, null);
 });
 
 test("a heartbeat after the automatic close is ignored", async () => {
@@ -772,11 +717,15 @@ test("a heartbeat after the automatic close is ignored", async () => {
   });
 
   await startDay(employee, {
-    lastSeen: seen({ at: AT_1535, withinGeofence: false }),
+    lastSeen: seen({ at: AT_1555, withinGeofence: false }),
     lastSeenInsideAt: AT_1530,
   });
 
   await sweepCompanyDay({ companyId: company._id, now: AT_1600 });
+  await Attendance.updateOne(
+    { employeeId: employee._id },
+    { $set: { lastSeen: seen({ at: AT_1650, withinGeofence: false }) } }
+  );
   await sweepCompanyDay({ companyId: company._id, now: AT_1705 });
 
   const closed = await storedRecord(employee);
@@ -812,7 +761,7 @@ test("a heartbeat after the automatic close is ignored", async () => {
   const after = await storedRecord(employee);
 
   assert.equal(after.checkOut.at.toISOString(), closed.checkOut.at.toISOString());
-  assert.equal(after.lastSeen.at.toISOString(), AT_1535.toISOString());
+  assert.equal(after.lastSeen.at.toISOString(), AT_1650.toISOString());
 });
 
 test("the sweep only touches today's open days", async () => {
