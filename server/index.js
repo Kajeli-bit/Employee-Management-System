@@ -19,6 +19,7 @@ import locationRouter from "./routes/locations.js";
 import orgRouter from "./routes/org.js";
 
 import connectToDatabase from "./db/db.js";
+import ensureDatabase from "./db/ensureDatabase.js";
 
 // Lambda-based hosts such as Vercel resolve mongodb+srv records through their
 // own resolver, and forcing public resolvers there leaves the Atlas lookup
@@ -96,6 +97,10 @@ app.get("/api/health/database", async (req, res) => {
     });
   }
 });
+
+// Wait for Atlas before any route that may query a Mongoose model. In
+// serverless runtimes, do not rely on the fire-and-forget warm-up below.
+app.use("/api", ensureDatabase);
 
 // Routes
 app.use("/api/auth", authRouter);

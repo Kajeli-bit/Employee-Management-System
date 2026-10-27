@@ -10,17 +10,31 @@ const databaseName = databaseNameForRuntime();
 // the instance.
 let connectionPromise = null;
 
-const connectToDatabase = async () => {
+const connectToDatabase = () => {
   if (!dbUrl) {
     throw new Error("ATLASDB_URL is not set");
   }
 
-  if (!connectionPromise) {
-    connectionPromise = mongoose
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (mongoose.connection.readyState === 2 && connectionPromise) {
+    return connectionPromise;
+  }
+
+  // A successful connect promise may outlive a socket that Atlas dropped.
+  // When disconnected, discard it so a later request can open a fresh client.
+  connectionPromise = null;
+  connectionPromise = mongoose
       // Fail inside the platform's time budget instead of letting queries sit
       // in Mongoose's buffer until they time out with no useful error.
       .connect(dbUrl, {
         serverSelectionTimeoutMS: 8000,
+        // Serverless instances may receive concurrent requests; keep each
+        // instance's socket pool bounded instead of using the driver's default.
+        maxPoolSize: 10,
+        minPoolSize: 0,
         // Local API processes are pinned to `test`; Vercel is pinned to `ems`.
         // An accidental database name in the URI cannot cross this boundary.
         dbName: databaseName,
@@ -39,7 +53,6 @@ const connectToDatabase = async () => {
 
         throw error;
       });
-  }
 
   return connectionPromise;
 };

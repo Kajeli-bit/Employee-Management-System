@@ -1,4 +1,5 @@
 import { clerkClient, getAuth } from "@clerk/express";
+import connectToDatabase from "../db/db.js";
 import User from "../models/User.js";
 
 // Connect an authenticated Clerk identity to an existing EMS account using
@@ -69,6 +70,8 @@ const linkClerkUserByEmail = async (clerkUserId) => {
 
 const verifyUser = async (req, res, next) => {
   try {
+    await connectToDatabase();
+
     const { userId } = getAuth(req);
 
     if (!userId) {
@@ -100,9 +103,12 @@ const verifyUser = async (req, res, next) => {
   } catch (error) {
     console.log("CLERK AUTH MIDDLEWARE ERROR:", error);
 
-    return res.status(401).json({
+    const isDbError =
+      error?.name?.startsWith("Mongo") || error?.name === "MongooseError";
+
+    return res.status(isDbError ? 503 : 401).json({
       success: false,
-      error: "Authentication failed",
+      error: isDbError ? "Database unavailable" : "Authentication failed",
     });
   }
 };
