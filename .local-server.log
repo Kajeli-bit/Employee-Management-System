@@ -1,0 +1,12 @@
+
+> server@1.0.0 start
+> node index.js
+
+Server is running on port 5000
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+MongoDB Atlas connected successfully
+Database: test
+Host: ac-h52x4zt-shard-00-00.ebeseux.mongodb.net

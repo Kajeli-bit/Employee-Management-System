@@ -39,11 +39,27 @@ app.use(clerkMiddleware());
 // CLIENT_URL pins the browser origin in deployed environments; without it the
 // API stays open so localhost and LAN testing keep working.
 const allowedOrigin = process.env.CLIENT_URL;
+const configuredOrigins = allowedOrigin
+  ? allowedOrigin.split(",").map((origin) => origin.trim())
+  : null;
+const localDevelopmentOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5199",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5199",
+];
 
 app.use(
   cors({
-    origin: allowedOrigin
-      ? allowedOrigin.split(",").map((origin) => origin.trim())
+    origin: configuredOrigins
+      ? (origin, callback) => {
+          const isAllowed =
+            configuredOrigins.includes(origin) ||
+            (!process.env.VERCEL &&
+              localDevelopmentOrigins.includes(origin));
+
+          callback(null, isAllowed);
+        }
       : true,
   })
 );
