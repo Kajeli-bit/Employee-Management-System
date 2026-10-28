@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -5,66 +6,48 @@ import {
   Navigate,
 } from "react-router-dom";
 
-import Login from "./pages/Login";
-import AdminDashboard from "./pages/AdminDashboard";
-import EmployeeDashboard from "./pages/EmployeeDashboard";
-
 import PrivateRoutes from "./utils/PrivateRoutes";
 import RoleBaseRoutes from "./utils/RoleBaseRoutes";
+import Loader from "./components/common/Loader";
+import PwaInstallPrompt from "./components/common/PwaInstallPrompt";
 
-// Dashboard
-import AdminSummary from "./components/dashboard/AdminSummary";
-
-// Department
-import DepartmentList from "./components/departments/DeparmentList";
-import AddDepartment from "./components/departments/AddDepartment";
-import ViewDepartment from "./components/departments/ViewDepartment";
-
-// Employee
-import List from "./components/employee/List";
-import Add from "./components/employee/Add";
-import View from "./components/employee/View";
-import Edit from "./components/employee/Edit";
-
-// Leave
-import LeaveList from "./components/leave/LeaveList";
-import EmployeeLeave from "./components/leave/EmployeeLeave";
-
-// IMPORTANT:
-// Same ApplyLeave component is used by management
-// and normal employees.
-import ApplyLeave from "./components/EmployeeDashboard/ApplyLeave";
-
-// Salary
-import SalaryList from "./components/salary/List";
-import AddSalary from "./components/salary/AddSalary";
-import EditSalary from "./components/salary/EditSalary";
-import SalaryHistory from "./components/salary/SalaryHistory";
-
-// Admin Settings
-import Settings from "./components/settings/Settings";
-
-// Attendance
-import AttendanceRegister from "./components/attendance/AttendanceRegister";
-import WorkLocations from "./components/attendance/WorkLocations";
-import MyAttendance from "./components/attendance/MyAttendance";
-
-// Organisation
-import OrgChart from "./components/org/OrgChart";
-
-// Employee Dashboard
-import EmployeeSummary from "./components/EmployeeDashboard/EmployeeSummary";
-import AttendanceHeartbeat from "./components/attendance/AttendanceHeartbeat";
-import MyLeaves from "./components/EmployeeDashboard/MyLeaves";
-import EditLeave from "./components/EmployeeDashboard/EditLeave";
-import Setting from "./components/EmployeeDashboard/Setting";
-import SecurityCenter from "./components/security/SecurityCenter";
+const Login = lazy(() => import("./pages/Login"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const EmployeeDashboard = lazy(() => import("./pages/EmployeeDashboard"));
+const AdminSummary = lazy(() => import("./components/dashboard/AdminSummary"));
+const DepartmentList = lazy(() => import("./components/departments/DeparmentList"));
+const AddDepartment = lazy(() => import("./components/departments/AddDepartment"));
+const ViewDepartment = lazy(() => import("./components/departments/ViewDepartment"));
+const List = lazy(() => import("./components/employee/List"));
+const Add = lazy(() => import("./components/employee/Add"));
+const View = lazy(() => import("./components/employee/View"));
+const Edit = lazy(() => import("./components/employee/Edit"));
+const LeaveList = lazy(() => import("./components/leave/LeaveList"));
+const EmployeeLeave = lazy(() => import("./components/leave/EmployeeLeave"));
+const ApplyLeave = lazy(() => import("./components/EmployeeDashboard/ApplyLeave"));
+const SalaryList = lazy(() => import("./components/salary/List"));
+const AddSalary = lazy(() => import("./components/salary/AddSalary"));
+const EditSalary = lazy(() => import("./components/salary/EditSalary"));
+const SalaryHistory = lazy(() => import("./components/salary/SalaryHistory"));
+const Settings = lazy(() => import("./components/settings/Settings"));
+const AttendanceRegister = lazy(() => import("./components/attendance/AttendanceRegister"));
+const WorkLocations = lazy(() => import("./components/attendance/WorkLocations"));
+const MyAttendance = lazy(() => import("./components/attendance/MyAttendance"));
+const OrgChart = lazy(() => import("./components/org/OrgChart"));
+const EmployeeSummary = lazy(() => import("./components/EmployeeDashboard/EmployeeSummary"));
+const AttendanceHeartbeat = lazy(() => import("./components/attendance/AttendanceHeartbeat"));
+const MyLeaves = lazy(() => import("./components/EmployeeDashboard/MyLeaves"));
+const EditLeave = lazy(() => import("./components/EmployeeDashboard/EditLeave"));
+const Setting = lazy(() => import("./components/EmployeeDashboard/Setting"));
+const SecurityCenter = lazy(() => import("./components/security/SecurityCenter"));
 
 function App() {
   return (
     <BrowserRouter>
-      <AttendanceHeartbeat />
-      <Routes>
+      <PwaInstallPrompt />
+      <Suspense fallback={<Loader label="Opening your workspace…" fullScreen />}>
+        <AttendanceHeartbeat />
+        <Routes>
 
        
 
@@ -130,13 +113,11 @@ function App() {
           element={
             <PrivateRoutes>
               <RoleBaseRoutes access="super-user">
-                <AdminDashboard />
+                <Navigate to="/admin-dashboard/security" replace />
               </RoleBaseRoutes>
             </PrivateRoutes>
           }
-        >
-          <Route index element={<SecurityCenter />} />
-        </Route>
+        />
 
         <Route
           path="/admin-dashboard"
@@ -174,27 +155,27 @@ function App() {
 
           <Route
             path="my"
-            element={<EmployeeSummary />}
+            element={<RoleBaseRoutes access="employee-workspace"><EmployeeSummary /></RoleBaseRoutes>}
           />
 
           <Route
             path="my/attendance"
-            element={<MyAttendance />}
+            element={<RoleBaseRoutes access="employee-workspace"><MyAttendance /></RoleBaseRoutes>}
           />
 
           <Route
             path="my/leaves"
-            element={<MyLeaves />}
+            element={<RoleBaseRoutes access="employee-workspace"><MyLeaves /></RoleBaseRoutes>}
           />
 
           <Route
             path="my/leaves/:id/edit"
-            element={<EditLeave />}
+            element={<RoleBaseRoutes access="employee-workspace"><EditLeave /></RoleBaseRoutes>}
           />
 
           <Route
             path="my/apply-leave"
-            element={<ApplyLeave />}
+            element={<RoleBaseRoutes access="employee-workspace"><ApplyLeave /></RoleBaseRoutes>}
           />
 
           {/* The salary, profile and account pages were removed; old URLs land
@@ -395,7 +376,8 @@ function App() {
 
         </Route>
 
-      </Routes>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

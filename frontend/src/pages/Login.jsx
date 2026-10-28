@@ -78,15 +78,6 @@ const Login = () => {
     checkSetup();
   }, [checkSetup]);
 
-  // The company's first account must use the email it signed in with.
-  useEffect(() => {
-    const email = clerkUser?.primaryEmailAddress?.emailAddress;
-
-    if (email) {
-      setForm((prev) => ({ ...prev, email }));
-    }
-  }, [clerkUser]);
-
   useEffect(() => {
     if (loading || !user) {
       return;
@@ -94,7 +85,7 @@ const Login = () => {
 
     navigate(
       isSuperUser(user)
-        ? "/super-user"
+        ? "/admin-dashboard"
         : isManagementUser(user)
           ? "/admin-dashboard"
           : "/employee-dashboard",
@@ -131,7 +122,7 @@ const Login = () => {
           name: form.name,
           dob: form.dob,
           username: form.username,
-          email: form.email,
+          email: clerkUser?.primaryEmailAddress?.emailAddress || form.email,
           companyName: form.companyName,
         },
         {
@@ -405,7 +396,7 @@ const Login = () => {
                       label="Email (from your sign-in)"
                       name="email"
                       type="email"
-                      value={form.email}
+                      value={clerkUser?.primaryEmailAddress?.emailAddress || form.email}
                       onChange={handleChange}
                       readOnly
                     />

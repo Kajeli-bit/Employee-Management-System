@@ -797,7 +797,7 @@ export const getAttendance = async (req, res) => {
 
 export const getEmployeeHistory = async (req, res) => {
   try {
-    if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_VIEW)) {
+    if (!isSuperUser(req.user) && !hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_VIEW)) {
       return res.status(403).json({
         success: false,
         error: "You are not allowed to view attendance records",
@@ -878,10 +878,7 @@ export const getEmployeeHistory = async (req, res) => {
 
 export const markAttendance = async (req, res) => {
   try {
-    if (isSuperUser(req.user)) {
-      return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee attendance" });
-    }
-    if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
+    if (!isSuperUser(req.user) && !hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
       return res.status(403).json({
         success: false,
         error: "You are not allowed to regularize attendance",
@@ -929,7 +926,7 @@ export const markAttendance = async (req, res) => {
     const targetRole = targetEmployee.userId?.role;
 
     const allowed =
-      roleLevel(req.user.role) > roleLevel(targetRole) &&
+      (isSuperUser(req.user) || roleLevel(req.user.role) > roleLevel(targetRole)) &&
       (await canManageEmployee({
         user: req.user,
         actorEmployee,
@@ -1058,10 +1055,7 @@ export const markAttendance = async (req, res) => {
 
 export const updateAttendance = async (req, res) => {
   try {
-    if (isSuperUser(req.user)) {
-      return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee attendance" });
-    }
-    if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
+    if (!isSuperUser(req.user) && !hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
       return res.status(403).json({
         success: false,
         error: "You are not allowed to edit attendance records",
@@ -1091,6 +1085,7 @@ export const updateAttendance = async (req, res) => {
 
     if (
       !targetEmployee ||
+      (!isSuperUser(req.user) && !hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) ||
       !(await canManageEmployee({
         user: req.user,
         actorEmployee,

@@ -5,8 +5,7 @@ import Salary from "../models/Salary.js";
 import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
 
-import { CAPABILITIES, hasCapability } from "../utils/roles.js";
-import { isSuperUser } from "../middleware/superUser.js";
+import { CAPABILITIES, hasUserCapability } from "../utils/roles.js";
 import { accessibleEmployeeFilter } from "../utils/access.js";
 import {
   localDateKey,
@@ -18,22 +17,8 @@ export const getDashboard = async (req, res) => {
   try {
     const companyId = req.user.companyId;
 
-    // The dashboard shows the same population the signed-in user's pages use:
-    // the whole company for the Managing Director and HR, their own record for
-    // a worker.
-    if (isSuperUser(req.user)) {
-      return res.status(200).json({
-        success: true,
-        totalEmployees: await Employee.countDocuments({ companyId }),
-        totalDepartments: await Department.countDocuments({ companyId, kind: "department" }),
-        totalSalaryRecords: 0,
-        totalSalaryPaid: 0,
-        totalLeaves: 0,
-        approvedLeaves: 0,
-        todayAttendance: 0,
-      });
-    }
-
+    // The super-user shares the Managing Director's company-wide dashboard,
+    // while remaining a separate account without an employee workspace.
     const employeeFilter = await accessibleEmployeeFilter(req.user);
 
     if (!employeeFilter) {
@@ -51,13 +36,13 @@ export const getDashboard = async (req, res) => {
       (employee) => employee._id
     );
 
-    const canSeeSalaries = hasCapability(
-      req.user.role,
+    const canSeeSalaries = hasUserCapability(
+      req.user,
       CAPABILITIES.SALARIES_VIEW
     );
 
-    const canSeeAttendance = hasCapability(
-      req.user.role,
+    const canSeeAttendance = hasUserCapability(
+      req.user,
       CAPABILITIES.ATTENDANCE_VIEW
     );
 
@@ -67,7 +52,6 @@ export const getDashboard = async (req, res) => {
 
     const timezone = company?.attendance?.timezone || DEFAULT_TIMEZONE;
     const today = localDateKey(new Date(), timezone);
-
     const [totalDepartments, salaryStats, leaveStats, todayAttendance] =
       await Promise.all([
         // Teams share the departments collection, so count only real

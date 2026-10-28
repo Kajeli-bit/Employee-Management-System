@@ -1,7 +1,7 @@
 
 import Salary from "../models/Salary.js";
 import Employee from "../models/Employee.js";
-import { canManageRole } from "../utils/roles.js";
+import { canManageRole, hasUserCapability, CAPABILITIES } from "../utils/roles.js";
 import { isSuperUser } from "../middleware/superUser.js";
 import {
   canManageEmployee,
@@ -64,7 +64,6 @@ const canManageSalaryEmployee = async (req, employeeId) => {
 
 export const addSalary = async (req, res) => {
   try {
-    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Use the restricted security console for super-user actions" });
     const {
       employeeId,
       basicSalary,
@@ -183,7 +182,6 @@ export const addSalary = async (req, res) => {
 
 export const getSalaries = async (req, res) => {
   try {
-    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Salary data is available only through an audited company export" });
     const salaries = await Salary.find({
       companyId: req.user.companyId,
     })
@@ -221,10 +219,8 @@ export const getSalaries = async (req, res) => {
 
       const canView =
         isSuperUser(req.user) || isSelf ||
-        canManageRole(
-          req.user.role,
-          targetUser.role
-        );
+        (hasUserCapability(req.user, CAPABILITIES.SALARIES_VIEW) &&
+          (isSuperUser(req.user) || canManageRole(req.user.role, targetUser.role)));
 
       if (!canView) {
         continue;
@@ -275,7 +271,6 @@ export const getSalary = async (
   res
 ) => {
   try {
-    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Salary data is available only through an audited company export" });
     const { id } = req.params;
 
     const salary = await Salary.findOne({
@@ -357,7 +352,6 @@ export const updateSalary = async (
   res
 ) => {
   try {
-    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Super-user accounts do not manage payroll" });
     const { id } = req.params;
 
     const salary = await Salary.findOne({
@@ -401,10 +395,7 @@ export const updateSalary = async (
     }
 
     if (
-      !isSuperUser(req.user) && !canManageRole(
-        req.user.role,
-        targetUser.role
-      )
+      !(isSuperUser(req.user) || canManageRole(req.user.role, targetUser.role))
     ) {
       return res.status(403).json({
         success: false,
@@ -551,7 +542,6 @@ export const deleteSalary = async (
   res
 ) => {
   try {
-    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Super-user accounts do not manage payroll" });
     const { id } = req.params;
 
     const salary = await Salary.findOne({
@@ -595,10 +585,7 @@ export const deleteSalary = async (
     }
 
     if (
-      !isSuperUser(req.user) && !canManageRole(
-        req.user.role,
-        targetUser.role
-      )
+      !(isSuperUser(req.user) || canManageRole(req.user.role, targetUser.role))
     ) {
       return res.status(403).json({
         success: false,
@@ -636,7 +623,6 @@ export const getSalaryHistory = async (
   res
 ) => {
   try {
-    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Salary data is available only through an audited company export" });
     const { id } = req.params;
 
     const employee =
@@ -770,7 +756,6 @@ export const getMySalary = async (
   res
 ) => {
   try {
-    if (isSuperUser(req.user)) return res.status(200).json({ success: true, salaries: [] });
     const employee =
       await Employee.findOne({
         userId: req.user._id,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Loader from "../common/Loader";
 import axios from "axios";
-import { useAuth } from "../../context/authContext";
+import { useAuth } from "../../context/useAuth";
 import API_URL from "../../api";
 
 const Salary = () => {

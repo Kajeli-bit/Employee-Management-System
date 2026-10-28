@@ -70,7 +70,21 @@ const linkClerkUserByEmail = async (clerkUserId) => {
 
 const isSuperUserRouteAllowed = (req) => {
   const pathname = String(req.originalUrl || "").split("?", 1)[0];
-  return pathname === "/api/auth/verify" || pathname.startsWith("/api/super-user/");
+  const companyRoutes = [
+    "/api/dashboard",
+    "/api/employee",
+    "/api/department",
+    "/api/salary",
+    "/api/leave",
+    "/api/attendance",
+    "/api/locations",
+    "/api/org",
+    "/api/super-user",
+  ];
+
+  return pathname === "/api/auth/verify" || companyRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
 };
 
 export const enforceAuthenticatedUser = (req, res, next) => {
@@ -96,7 +110,7 @@ export const enforceAuthenticatedUser = (req, res, next) => {
     if (!isSuperUserRouteAllowed(req)) {
       return res.status(403).json({
         success: false,
-        error: "Super-user accounts are limited to security and recovery operations",
+        error: "Super-user accounts are limited to company management and security operations",
       });
     }
   }

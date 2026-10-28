@@ -390,10 +390,7 @@ export const nudgeSweeps = async (companyId) => {
 // manager notices a night of unclosed days.
 export const runCompanySweep = async (req, res) => {
   try {
-    if (isSuperUser(req.user)) {
-      return res.status(403).json({ success: false, error: "Super-user accounts do not run employee attendance automation" });
-    }
-    if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
+    if (!isSuperUser(req.user) && !hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
       return res.status(403).json({
         success: false,
         error: "You are not allowed to run the attendance check",

@@ -1,7 +1,7 @@
 
 import axios from "axios";
 import {
-  createContext,
+  useCallback,
   useEffect,
   useState,
 } from "react";
@@ -12,8 +12,7 @@ import {
 } from "@clerk/react";
 
 import API_URL from "../api";
-
-export const userContext = createContext();
+import { userContext } from "./userContext";
 
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
 
@@ -132,7 +131,7 @@ const AuthContext = ({ children }) => {
     setLoading(false);
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       sessionStorage.removeItem(
         "ems_registration_in_progress"
@@ -152,7 +151,7 @@ const AuthContext = ({ children }) => {
         error
       );
     }
-  };
+  }, [signOut]);
 
   useEffect(() => {
     if (
@@ -205,6 +204,7 @@ const AuthContext = ({ children }) => {
     isLoaded,
     isSignedIn,
     user,
+    logout,
   ]);
 
   return (

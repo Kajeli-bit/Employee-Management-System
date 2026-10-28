@@ -306,10 +306,50 @@ const WorkLocations = () => {
   }, [getToken]);
 
   useEffect(() => {
-    if (getToken) {
-      load();
-    }
-  }, [getToken, load]);
+    let active = true;
+
+    const loadInitialData = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const headers = { Authorization: `Bearer ${token}` };
+        const [locationResponse, policyResponse] = await Promise.all([
+          axios.get(`${API_URL}/api/locations`, {
+            headers,
+            params: { includeInactive: "true" },
+          }),
+          axios.get(`${API_URL}/api/locations/policy`, { headers }),
+        ]);
+
+        if (!active) return;
+        if (locationResponse.data.success) {
+          setLocations(locationResponse.data.locations || []);
+        }
+        if (policyResponse.data.success) {
+          setPolicy((current) => ({
+            ...current,
+            ...policyResponse.data.policy,
+          }));
+        }
+      } catch (error) {
+        if (active) {
+          setMessage({
+            type: "error",
+            text:
+              error.response?.data?.error ||
+              "Unable to load work locations.",
+          });
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadInitialData();
+    return () => {
+      active = false;
+    };
+  }, [getToken]);
 
   useEffect(() => {
     if (!sortOpen) {

@@ -22,12 +22,16 @@ const RoleBaseRoutes = ({ children, access, requiredRole }) => {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  if (access === "management" && (!isManagementUser(user) || isSuperUser(user))) {
+  if (access === "management" && !isManagementUser(user)) {
     return <Navigate to={isSuperUser(user) ? "/super-user" : "/employee-dashboard"} replace />;
   }
 
   if (access === "self" && isSuperUser(user)) {
-    return <Navigate to="/super-user" replace />;
+    return <Navigate to="/admin-dashboard" replace />;
+  }
+
+  if (access === "employee-workspace" && isSuperUser(user)) {
+    return <Navigate to="/admin-dashboard" replace />;
   }
 
   if (access === "super-user" && !isSuperUser(user)) {

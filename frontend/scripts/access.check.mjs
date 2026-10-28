@@ -19,7 +19,7 @@ const user = (role) => ({ _id: "u1", name: "Test Person", role });
 
 try {
   const { userContext } = await server.ssrLoadModule(
-    "/src/context/authContext.jsx"
+    "/src/context/userContext.js"
   );
   const { default: RoleBaseRoutes } = await server.ssrLoadModule(
     "/src/utils/RoleBaseRoutes.jsx"

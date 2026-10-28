@@ -133,14 +133,6 @@ const List = () => {
   }, [search]);
 
   useEffect(() => {
-    if (search.trim() !== debouncedSearch) {
-      return;
-    }
-
-    setPage(1);
-  }, [debouncedSearch]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const fetchDepartments = async () => {
@@ -321,6 +313,7 @@ const List = () => {
 
   const handleSearch = (e) => {
     setSearch(e.target.value);
+    setPage(1);
   };
 
   const handleRoleChange = (id) => {

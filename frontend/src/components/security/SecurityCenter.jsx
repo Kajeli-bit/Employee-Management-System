@@ -30,12 +30,12 @@ const SecurityCenter = () => {
     });
   }, [getToken]);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const refresh = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const response = await request("/api/super-user/overview");
       setOverview(response.data.overview);
+      setError("");
     } catch (fetchError) {
       setError(fetchError.response?.data?.error || "Security details could not be loaded.");
     } finally {
@@ -43,7 +43,27 @@ const SecurityCenter = () => {
     }
   }, [request]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    let active = true;
+
+    request("/api/super-user/overview")
+      .then((response) => {
+        if (!active) return;
+        setOverview(response.data.overview);
+        setError("");
+      })
+      .catch((fetchError) => {
+        if (!active) return;
+        setError(fetchError.response?.data?.error || "Security details could not be loaded.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [request]);
 
   const runRecovery = async (account, action) => {
     if (reason.trim().length < 8) {
@@ -62,7 +82,7 @@ const SecurityCenter = () => {
       });
       setNotice(action === "revoke-sessions" ? `${response.data.revokedSessions} session(s) revoked for ${account.name}.` : `${account.name} is now ${response.data.account.accountStatus}.`);
       setReason("");
-      await refresh();
+      await refresh(true);
     } catch (actionError) {
       setError(actionError.response?.data?.error || "The recovery action failed.");
     } finally {
@@ -95,7 +115,7 @@ const SecurityCenter = () => {
       URL.revokeObjectURL(url);
       setExportReason("");
       setNotice("Company export downloaded. The action was recorded in the audit trail.");
-      await refresh();
+      await refresh(true);
     } catch (actionError) {
       setError(actionError.response?.data?.error || "The company export failed.");
     } finally {
@@ -114,7 +134,7 @@ const SecurityCenter = () => {
             <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-950 sm:text-4xl">Security &amp; recovery</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Review account protection, recover company access, and inspect recorded privileged actions.</p>
           </div>
-          <button type="button" onClick={refresh} className={`${actionButton} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>Refresh review</button>
+          <button type="button" onClick={() => refresh(true)} className={`${actionButton} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>Refresh review</button>
         </header>
 
         {error && <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}

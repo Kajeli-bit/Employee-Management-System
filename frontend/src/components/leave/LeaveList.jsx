@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FaCalendarAlt } from "react-icons/fa";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
@@ -37,50 +37,70 @@ const LeaveList = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  const fetchLeaves = async () => {
+  const requestLeaves = useCallback(async () => {
+    const token = await getToken();
+
+    if (!token) {
+      console.log("CLERK TOKEN NOT FOUND");
+      return null;
+    }
+
+    const response = await axios.get(
+      `${API_URL}/api/leave`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    return response.data.success ? response.data.leaves || [] : [];
+  }, [getToken]);
+
+  const reportFetchError = (error) => {
+    console.log(
+      "GET LEAVES ERROR:",
+      error.response?.status,
+      error.response?.data || error.message
+    );
+
+    alert(
+      error.response?.data?.error ||
+        "Unable to fetch leave requests"
+    );
+  };
+
+  const fetchLeaves = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const token = await getToken();
-
-      if (!token) {
-        console.log("CLERK TOKEN NOT FOUND");
-        return;
-      }
-
-      const response = await axios.get(
-        `${API_URL}/api/leave`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.data.success) {
-        setLeaves(response.data.leaves || []);
-      }
+      const nextLeaves = await requestLeaves();
+      if (nextLeaves) setLeaves(nextLeaves);
     } catch (error) {
-      console.log(
-        "GET LEAVES ERROR:",
-        error.response?.status,
-        error.response?.data || error.message
-      );
-
-      alert(
-        error.response?.data?.error ||
-          "Unable to fetch leave requests"
-      );
+      reportFetchError(error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [requestLeaves]);
 
   useEffect(() => {
-    if (user && getToken) {
-      fetchLeaves();
-    }
-  }, [user, getToken]);
+    if (!user || !getToken) return undefined;
+
+    let active = true;
+    requestLeaves()
+      .then((nextLeaves) => {
+        if (active && nextLeaves) setLeaves(nextLeaves);
+      })
+      .catch((error) => {
+        if (active) reportFetchError(error);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user, getToken, requestLeaves]);
 
   const updateStatus = async (id, status) => {
     try {

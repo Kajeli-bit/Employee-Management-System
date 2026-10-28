@@ -80,7 +80,7 @@ const List = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [getToken]);
 
   const canManageSalary = (salary) => {
     if (!user || !salary) {

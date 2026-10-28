@@ -15,6 +15,7 @@ import {
   CAPABILITIES,
   canManageRole,
   hasCapability,
+  hasUserCapability,
   isDepartmentScoped,
   isValidRole,
   roleFilterAliases,
@@ -175,8 +176,6 @@ const deleteFromCloudinary = async (publicId) => {
 // only the request and response, so the real client is used.
 export const addEmployee = async (req, res, options = {}) => {
   const clerk = options.clerk || clerkClient;
-  if (req.user.accountType === "super_user") return res.status(403).json({ success: false, error: "Super-user accounts cannot create employee identities" });
-
   let clerkUserId = null;
   let clerkUserWasCreated = false;
   let clerkPersonalEmailAddressId = null;
@@ -198,7 +197,7 @@ export const addEmployee = async (req, res, options = {}) => {
   };
 
   try {
-    if (!hasCapability(req.user.role, CAPABILITIES.PEOPLE_MANAGE)) {
+    if (!hasUserCapability(req.user, CAPABILITIES.PEOPLE_MANAGE)) {
 
       return res.status(403).json({
         success: false,
@@ -239,7 +238,14 @@ export const addEmployee = async (req, res, options = {}) => {
       });
     }
 
-    if (req.user.accountType === "super_user" || !canManageRole(req.user.role, requestedRole)) {
+    if (req.user.role === "managing_director" && requestedRole === "managing_director") {
+      return res.status(403).json({
+        success: false,
+        error: "Only the initial company setup can create a Managing Director account",
+      });
+    }
+
+    if (!canManageRole(req.user.role, requestedRole)) {
       return res.status(403).json({
         success: false,
         error: "You can only create users below your role",
@@ -684,7 +690,6 @@ export const addEmployee = async (req, res, options = {}) => {
 
 export const getEmployees = async (req, res) => {
   try {
-    if (req.user.accountType === "super_user") return res.status(403).json({ success: false, error: "Use the restricted security console for super-user actions" });
     // Same rule the dashboard and attendance register use, so the counts always
     // match the rows listed here.
     const accessibleRoles = visibleRoleKeys(req.user);
@@ -955,7 +960,6 @@ export const getEmployee = async (
   res
 ) => {
   try {
-    if (req.user.accountType === "super_user") return res.status(403).json({ success: false, error: "Super-user accounts do not use employee profiles" });
     const { id } = req.params;
 
     const employee =
@@ -1029,8 +1033,6 @@ export const updateEmployee = async (
   res
 ) => {
   let newlyAddedClerkEmailId = null;
-  if (req.user.accountType === "super_user") return res.status(403).json({ success: false, error: "Super-user accounts do not edit employee profiles" });
-
   try {
     const { id } = req.params;
 
@@ -1144,13 +1146,7 @@ export const updateEmployee = async (
       });
     }
 
-    if (
-      req.user.accountType === "super_user" ||
-      !canManageRole(
-        req.user.role,
-        updatedRole
-      )
-    ) {
+    if (!canManageRole(req.user.role, updatedRole)) {
       return res.status(403).json({
         success: false,
         error:
@@ -1516,7 +1512,6 @@ export const deleteEmployee = async (
   res
 ) => {
   try {
-    if (req.user.accountType === "super_user") return res.status(403).json({ success: false, error: "Super-user accounts do not delete employees" });
     const { id } = req.params;
 
     const employee =

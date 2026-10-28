@@ -4,7 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import AdminSidebar from "./components/dashboard/AdminSidebar";
 import Navbar from "./components/dashboard/Navbar";
-import { userContext } from "./context/authContext";
+import { userContext } from "./context/userContext";
 
 const mockAuth = {
   user: {

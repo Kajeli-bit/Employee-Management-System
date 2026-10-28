@@ -18,7 +18,7 @@ const myAttendanceSource = await readFile(
 
 test("attendance heartbeat is mounted above both employee and manager routes", () => {
   assert.match(appSource, /<BrowserRouter>[\s\S]*?<AttendanceHeartbeat\s*\/>[\s\S]*?<Routes>/);
-  assert.match(appSource, /import AttendanceHeartbeat from "\.\/components\/attendance\/AttendanceHeartbeat"/);
+  assert.match(appSource, /const AttendanceHeartbeat = lazy\(\(\) => import\("\.\/components\/attendance\/AttendanceHeartbeat"\)\)/);
 });
 
 test("the shared refresh loop nudges the sweep and publishes the latest record", () => {
