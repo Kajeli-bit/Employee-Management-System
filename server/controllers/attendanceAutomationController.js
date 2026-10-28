@@ -6,6 +6,7 @@ import Employee from "../models/Employee.js";
 import WorkLocation from "../models/WorkLocation.js";
 
 import { CAPABILITIES, hasCapability } from "../utils/roles.js";
+import { isSuperUser } from "../middleware/superUser.js";
 import { evaluateGeofence, isValidCoordinate, localDateKey } from "../utils/geo.js";
 import {
   closingSummary,
@@ -34,6 +35,9 @@ const isUnavailableEmployee = (employee) =>
 // read a phone's location.
 export const recordHeartbeat = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(403).json({ success: false, error: "Super-user accounts do not record employee attendance" });
+    }
     const latitude = Number(req.body?.latitude);
     const longitude = Number(req.body?.longitude);
     const accuracy = Number(req.body?.accuracy);
@@ -386,6 +390,9 @@ export const nudgeSweeps = async (companyId) => {
 // manager notices a night of unclosed days.
 export const runCompanySweep = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(403).json({ success: false, error: "Super-user accounts do not run employee attendance automation" });
+    }
     if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
       return res.status(403).json({
         success: false,

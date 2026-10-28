@@ -52,9 +52,10 @@ const readPosition = () =>
   });
 
 const AttendanceHeartbeat = () => {
-  const { getToken } = useAuth();
+  const { getToken, user } = useAuth();
 
   useEffect(() => {
+    if (user?.accountType === "super_user") return undefined;
     let cancelled = false;
     let lastBeatAt = 0;
     let refreshInFlight = null;
@@ -237,7 +238,7 @@ const AttendanceHeartbeat = () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener(ATTENDANCE_REFRESH_EVENT, onAttendanceRefresh);
     };
-  }, [getToken]);
+  }, [getToken, user?.accountType]);
 
   return null;
 };

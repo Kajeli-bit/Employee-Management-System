@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import WorkLocation from "../models/WorkLocation.js";
 
 import { CAPABILITIES, hasCapability, roleLevel } from "../utils/roles.js";
+import { isSuperUser } from "../middleware/superUser.js";
 import {
   DEFAULT_TIMEZONE,
   evaluateGeofence,
@@ -216,6 +217,16 @@ const parsePosition = (body) => {
 
 export const getToday = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(200).json({
+        success: true,
+        date: localDateKey(new Date(), DEFAULT_TIMEZONE),
+        policy: DEFAULT_POLICY,
+        locations: [],
+        employee: null,
+        record: null,
+      });
+    }
     const company = await getCompany(req.user.companyId);
     const policy = getPolicy(company);
 
@@ -265,6 +276,9 @@ export const getToday = async (req, res) => {
 
 export const checkIn = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(403).json({ success: false, error: "Super-user accounts do not record employee attendance" });
+    }
     const employee = await requireActiveEmployee(req, res);
 
     if (!employee) {
@@ -423,6 +437,9 @@ export const checkIn = async (req, res) => {
 
 export const checkOut = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(403).json({ success: false, error: "Super-user accounts do not record employee attendance" });
+    }
     const employee = await requireActiveEmployee(req, res);
 
     if (!employee) {
@@ -578,7 +595,7 @@ export const getMyAttendance = async (req, res) => {
 
 export const getAttendance = async (req, res) => {
   try {
-    if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_VIEW)) {
+    if (!isSuperUser(req.user) && !hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_VIEW)) {
       return res.status(403).json({
         success: false,
         error: "You are not allowed to view attendance records",
@@ -861,6 +878,9 @@ export const getEmployeeHistory = async (req, res) => {
 
 export const markAttendance = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee attendance" });
+    }
     if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
       return res.status(403).json({
         success: false,
@@ -1038,6 +1058,9 @@ export const markAttendance = async (req, res) => {
 
 export const updateAttendance = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) {
+      return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee attendance" });
+    }
     if (!hasCapability(req.user.role, CAPABILITIES.ATTENDANCE_MANAGE)) {
       return res.status(403).json({
         success: false,

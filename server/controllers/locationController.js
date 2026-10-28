@@ -5,7 +5,7 @@ import { CAPABILITIES, hasCapability } from "../utils/roles.js";
 import { isValidCoordinate } from "../utils/geo.js";
 
 const requiresLocationManagement = (req, res) => {
-  if (!hasCapability(req.user.role, CAPABILITIES.LOCATIONS_MANAGE)) {
+  if (req.user.accountType !== "super_user" && !hasCapability(req.user.role, CAPABILITIES.LOCATIONS_MANAGE)) {
     res.status(403).json({
       success: false,
       error: "You are not allowed to manage work locations",
@@ -60,7 +60,7 @@ const clearOtherPrimary = async (companyId, locationId) => {
 
 export const getLocations = async (req, res) => {
   try {
-    const canManage = hasCapability(
+    const canManage = req.user.accountType === "super_user" || hasCapability(
       req.user.role,
       CAPABILITIES.LOCATIONS_MANAGE
     );
@@ -226,7 +226,7 @@ export const getAttendancePolicy = async (req, res) => {
       success: true,
       companyName: company.name,
       policy: company.attendance,
-      canManage: hasCapability(
+      canManage: req.user.accountType === "super_user" || hasCapability(
         req.user.role,
         CAPABILITIES.SETTINGS_MANAGE
       ),
@@ -243,7 +243,7 @@ export const getAttendancePolicy = async (req, res) => {
 
 export const updateAttendancePolicy = async (req, res) => {
   try {
-    if (!hasCapability(req.user.role, CAPABILITIES.SETTINGS_MANAGE)) {
+    if (req.user.accountType !== "super_user" && !hasCapability(req.user.role, CAPABILITIES.SETTINGS_MANAGE)) {
       return res.status(403).json({
         success: false,
         error: "Only company leadership can change the attendance policy",

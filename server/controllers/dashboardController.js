@@ -6,6 +6,7 @@ import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
 
 import { CAPABILITIES, hasCapability } from "../utils/roles.js";
+import { isSuperUser } from "../middleware/superUser.js";
 import { accessibleEmployeeFilter } from "../utils/access.js";
 import {
   localDateKey,
@@ -20,6 +21,19 @@ export const getDashboard = async (req, res) => {
     // The dashboard shows the same population the signed-in user's pages use:
     // the whole company for the Managing Director and HR, their own record for
     // a worker.
+    if (isSuperUser(req.user)) {
+      return res.status(200).json({
+        success: true,
+        totalEmployees: await Employee.countDocuments({ companyId }),
+        totalDepartments: await Department.countDocuments({ companyId, kind: "department" }),
+        totalSalaryRecords: 0,
+        totalSalaryPaid: 0,
+        totalLeaves: 0,
+        approvedLeaves: 0,
+        todayAttendance: 0,
+      });
+    }
+
     const employeeFilter = await accessibleEmployeeFilter(req.user);
 
     if (!employeeFilter) {

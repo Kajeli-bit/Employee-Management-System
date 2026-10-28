@@ -16,6 +16,7 @@ A full-stack employee management system for **Nilric General Traders Company Lim
 | UI | IBM Plex typography, capability-driven navigation, TZS currency, Nilric login copy and attendance-first employee dashboard. |
 | My workspace | The management console carries the signed-in manager's own dashboard, attendance and leave records under `/admin-dashboard/my`, so clocking in or applying for leave never leaves the console. |
 | Worker workspace | The self-service dashboard uses a full-width content layout; account and sign-out actions live in its sidebar on desktop and mobile. |
+| Security oversight | A separate server-provisioned super-user account has its own restricted security workspace for account recovery, company export and tamper-evident audit review; it is not an employee record or an employee role. |
 
 ---
 
@@ -32,6 +33,27 @@ There are two workspaces, chosen by role.
 `/admin-dashboard` requires the Managing Director or HR. Its sidebar ends with a **My workspace** group holding the manager's own pages: dashboard, attendance, leaves and apply for leave. They are mounted inside the console at `/admin-dashboard/my/...`, so a manager keeps the management navigation while clocking in or filing leave, and the personal pages work out of whichever shell opened them. `/employee-dashboard` is still the worker portal and stays open to every signed-in account. Workers are redirected away from management routes, and the API enforces the same rule independently.
 
 Self-service salary, profile and account pages were removed from both workspaces; salary records are managed from the console's **Salary** screen. Login security lives on the settings page, reached by clicking your name and role at the bottom of the console sidebar (and on the worker portal's **Settings** link). The `/api/salary/my-salary` and `/api/employee/profile/me` endpoints are still mounted for future use.
+
+### Restricted super-user
+
+A super-user is a separate, server-provisioned Clerk-linked account for security oversight. It has no Employee record, is excluded from staff-directory and employee counts, cannot sign in through the employee or manager portal, and is denied all API operations outside `/api/auth/verify` and `/api/super-user/*`. The `/super-user` workspace exposes account recovery, an audited company JSON export, MFA/session overview and the append-only SHA-256 linked audit chain. Existing MD/HR capabilities and staff workflows remain unchanged. Security status can be read by an explicitly marked `securityOversight` employee account, but recovery/export are super-user-only.
+
+Provision the account once from a trusted machine after creating the target person's Clerk login. Use the company's Mongo ObjectId (not the name) and the Clerk user ID. Set a fresh, random `SUPER_USER_BOOTSTRAP_KEY` of at least 32 characters and the exact company id in server-only environment variables; keep both out of frontend configuration and browser requests other than the one-time authenticated bootstrap header. The configured account's Clerk primary email must be verified, and it must be distinct from existing EMS logins. It is only valid for a company with a Managing Director.
+
+```bash
+cd server
+# Populate SUPER_USER_BOOTSTRAP_KEY and SUPER_USER_COMPANY_ID in server/.env first.
+# Authenticate in the browser as the Clerk user who will own this account, then:
+curl -X POST http://localhost:5000/api/super-user/bootstrap \
+  -H 'Authorization: Bearer <that Clerk session token>' \
+  -H 'x-super-user-bootstrap-key: <server bootstrap key>' \
+  -H 'Content-Type: application/json' \
+  --data '{"companyId":"<configured company ObjectId>","reason":"Initial security oversight account"}'
+```
+
+For controlled server-side provisioning without an HTTP request, use `npm run provision:super-user -- <clerk-user-id> "reason"`; it reads `SUPER_USER_COMPANY_ID` and the Clerk secret from the backend environment and verifies the same primary email and one-account-per-company conditions. Do not place these server credentials in the Vite `.env`, commit them, or paste them into an issue. The account is provisioned only once; to replace it, follow an authorized recovery and account-lifecycle process rather than deleting audit state.
+
+Security actions require an 8–500 character reason. Audit events are immutable and ordered per company; the security center detects gaps or digest changes and shows an integrity warning. Recovery includes suspending/reactivating employee accounts and revoking up to 500 active Clerk sessions in one operation. Company export is private/no-store JSON, excludes the super-user, login credentials, Clerk IDs and image-provider IDs, and refuses payloads larger than 50 MB. Keep authorized exports in controlled storage.
 
 Capabilities are defined once in [`server/utils/roles.js`](server/utils/roles.js) and mirrored in [`frontend/src/utils/roles.js`](frontend/src/utils/roles.js) for UI gating. Retired keys resolve through `LEGACY_ROLE_ALIASES`:
 
@@ -150,6 +172,11 @@ All endpoints require a Clerk session token (`Authorization: Bearer <token>`), a
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | GET | `/api/health` | Liveness probe; returns `{ success, status, uptime }` without touching the database |
+| POST | `/api/super-user/bootstrap` | One-time setup with authenticated Clerk session, server-only bootstrap key, configured company id and reason |
+| GET | `/api/super-user/me` | Identify the authenticated account as super-user |
+| GET | `/api/super-user/overview` | Restricted account security status, privileged audit history and chain integrity |
+| POST | `/api/super-user/accounts/:userId/recovery` | Suspend, reactivate or revoke the target account's active sessions; requires reason |
+| POST | `/api/super-user/export` | Download audited company data as private JSON; requires reason |
 
 ### Attendance
 
@@ -321,6 +348,7 @@ cd frontend && npm run lint         # currently reports pre-existing lint errors
 - `tests/orgStructure.test.js` — fresh seeding plus the structure sync: six departments and eight teams for a new company, renames/reparents/prunes on a legacy company, and that units holding employees are kept.
 - `tests/departments.test.js` — department registration with teams in one call (parent links, rollback on bad input) and the detail endpoint returning its teams.
 - `tests/attendance.integration.test.js` — the real attendance controller against a temporary MongoDB (`mongodb-memory-server`), so the unique index and atomic upserts are exercised rather than mocked. Covers an in-fence check-in, a rejected fix 12 km away that stores nothing, field staff clocking in off-site, duplicate punches, check-out without check-in, half-day and full-day settlement, a GPS punch replacing a manager's absence record, exited employees, and that a department manager cannot widen their register by passing another department in the query. The test calls the controller with a fake Express request/response, so it needs no Clerk keys and no running database; the first run downloads a MongoDB binary once, which is the only step that requires network access.
+- `tests/superUserSecurity.test.js` — super-user capability/scope separation, employee-directory exclusion, middleware denial for ordinary accounts and audit reason/chain-integrity guards.
 
 ---
 

@@ -156,9 +156,17 @@ export const isValidRole = (role) => resolveRole(role) !== null;
 export const hasCapability = (role, capability) =>
   Boolean(getRole(role)?.capabilities.includes(capability));
 
+// The standalone company super-user inherits every current company capability;
+// its separate accountType enables additional restricted security operations.
+export const hasUserCapability = (user, capability) =>
+  user?.accountType === "super_user" || hasCapability(user?.role, capability);
+
 // HR and above run the management console; workers get the self-service portal.
 export const isManagementRole = (role) =>
   roleLevel(role) >= ROLES.hr.level;
+
+export const isManagementUser = (user) =>
+  user?.accountType === "super_user" || isManagementRole(user?.role);
 
 export const isExecutiveRole = (role) => getRole(role)?.tier === "Executive";
 
@@ -201,7 +209,8 @@ export const assignableRoles = (actorRole) => {
 export const isDepartmentScoped = (role) =>
   ["department", "team"].includes(getRole(role)?.scope);
 
-export const roleLabel = (role) => getRole(role)?.label || role || "";
+export const roleLabel = (role) =>
+  role === "super_user" ? "Company Super User" : getRole(role)?.label || role || "";
 
 export const designationForRole = (role) =>
   getRole(role)?.designation || "Worker";

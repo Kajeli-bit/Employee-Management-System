@@ -14,6 +14,22 @@ const userSchema = new mongoose.Schema({
     default: false,
   },
 
+  // Standalone company administrator provisioned only through the server CLI.
+  // Super-user accounts intentionally have no Employee record.
+  accountType: {
+    type: String,
+    enum: ["employee", "super_user"],
+    default: "employee",
+    required: true,
+  },
+
+  accountStatus: {
+    type: String,
+    enum: ["active", "suspended"],
+    default: "active",
+    required: true,
+  },
+
   name: {
     type: String,
     required: true,
@@ -120,6 +136,13 @@ userSchema.index(
 );
 userSchema.index({ companyId: 1, role: 1 });
 userSchema.index({ companyId: 1, reportsTo: 1 });
+userSchema.index(
+  { companyId: 1, accountType: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { accountType: "super_user" },
+  }
+);
 
 const User = mongoose.model("User", userSchema);
 

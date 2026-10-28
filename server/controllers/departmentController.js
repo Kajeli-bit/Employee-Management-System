@@ -12,7 +12,7 @@ import {
 } from "../utils/roles.js";
 
 const canManageDepartments = (req, res) => {
-  if (!hasCapability(req.user.role, CAPABILITIES.DEPARTMENTS_MANAGE)) {
+  if (req.user.accountType !== "super_user" && !hasCapability(req.user.role, CAPABILITIES.DEPARTMENTS_MANAGE)) {
     res.status(403).json({
       success: false,
       error: "Only company leadership can manage departments",

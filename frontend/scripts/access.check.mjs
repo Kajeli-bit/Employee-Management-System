@@ -72,7 +72,7 @@ try {
   const admin = render(React.createElement(AdminSidebar), "hr");
   check(
     "HR console exposes people, leave approvals and attendance",
-    ["Employees", "Leave requests", "Team attendance", "Work locations", "Departments"].every((label) => admin.includes(label))
+    ["Staff Management", "Leave requests", "Team attendance", "Work locations", "Departments"].every((label) => admin.includes(label))
   );
   check(
     "the management sidebar does not link to Salary",

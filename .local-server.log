@@ -10,3 +10,5 @@ To learn more, including how to opt-out from the telemetry program, visit: https
 MongoDB Atlas connected successfully
 Database: test
 Host: ac-h52x4zt-shard-00-00.ebeseux.mongodb.net
+(node:37416) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+(Use `node --trace-warnings ...` to show where the warning was created)

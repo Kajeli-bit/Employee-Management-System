@@ -18,7 +18,7 @@ export const getOrgStructure = async (req, res) => {
       Employee.find({ companyId: req.user.companyId })
         .select("department userId workMode")
         .lean(),
-      User.find({ companyId: req.user.companyId })
+      User.find({ companyId: req.user.companyId, accountType: { $ne: "super_user" } })
         .select("role reportsTo")
         .lean(),
     ]);
@@ -116,6 +116,7 @@ export const getSupervisors = async (req, res) => {
     const [users, employees] = await Promise.all([
       User.find({
         companyId: req.user.companyId,
+        accountType: { $ne: "super_user" },
       })
         .select("name designation role")
         .lean(),

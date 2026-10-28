@@ -68,7 +68,44 @@ const linkClerkUserByEmail = async (clerkUserId) => {
   return linkClerkUserByVerifiedEmail(clerkUserId, clerkUser);
 };
 
+const isSuperUserRouteAllowed = (req) => {
+  const pathname = String(req.originalUrl || "").split("?", 1)[0];
+  return pathname === "/api/auth/verify" || pathname.startsWith("/api/super-user/");
+};
+
+export const enforceAuthenticatedUser = (req, res, next) => {
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({ success: false, error: "Authentication required" });
+  }
+  if (user.accountStatus === "suspended") {
+    return res.status(403).json({
+      success: false,
+      error: "This account is suspended. Contact your company administrator.",
+      code: "ACCOUNT_SUSPENDED",
+    });
+  }
+  if (user.accountType === "super_user") {
+    if (!user.companyScope || user.role !== "managing_director") {
+      return res.status(403).json({
+        success: false,
+        error: "This privileged account is not configured correctly. Contact support.",
+        code: "SUPER_USER_CONFIGURATION_INVALID",
+      });
+    }
+    if (!isSuperUserRouteAllowed(req)) {
+      return res.status(403).json({
+        success: false,
+        error: "Super-user accounts are limited to security and recovery operations",
+      });
+    }
+  }
+  return next();
+};
+
 const verifyUser = async (req, res, next) => {
+  if (req.user) return enforceAuthenticatedUser(req, res, next);
+
   try {
     await connectToDatabase();
 
@@ -98,8 +135,7 @@ const verifyUser = async (req, res, next) => {
     }
 
     req.user = user;
-
-    next();
+    return enforceAuthenticatedUser(req, res, next);
   } catch (error) {
     console.log("CLERK AUTH MIDDLEWARE ERROR:", error);
 

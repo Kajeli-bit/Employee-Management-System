@@ -58,6 +58,7 @@ import AttendanceHeartbeat from "./components/attendance/AttendanceHeartbeat";
 import MyLeaves from "./components/EmployeeDashboard/MyLeaves";
 import EditLeave from "./components/EmployeeDashboard/EditLeave";
 import Setting from "./components/EmployeeDashboard/Setting";
+import SecurityCenter from "./components/security/SecurityCenter";
 
 function App() {
   return (
@@ -125,6 +126,19 @@ function App() {
         
 
         <Route
+          path="/super-user"
+          element={
+            <PrivateRoutes>
+              <RoleBaseRoutes access="super-user">
+                <AdminDashboard />
+              </RoleBaseRoutes>
+            </PrivateRoutes>
+          }
+        >
+          <Route index element={<SecurityCenter />} />
+        </Route>
+
+        <Route
           path="/admin-dashboard"
           element={
             <PrivateRoutes>
@@ -135,12 +149,18 @@ function App() {
           }
         >
 
+          <Route index element={<AdminSummary />} />
+          <Route
+            path="security"
+            element={
+              <RoleBaseRoutes access="security-oversight">
+                <SecurityCenter />
+              </RoleBaseRoutes>
+            }
+          />
+
           {/* Dashboard */}
 
-          <Route
-            index
-            element={<AdminSummary />}
-          />
 
           
 
@@ -201,6 +221,7 @@ function App() {
             path="work-locations"
             element={<WorkLocations />}
           />
+
 
           <Route
             path="organisation"

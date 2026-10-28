@@ -5,6 +5,7 @@ import {
   canManageRole,
   hasCapability,
 } from "../utils/roles.js";
+import { isSuperUser } from "../middleware/superUser.js";
 import {
   canManageEmployee,
   getActorEmployee,
@@ -112,7 +113,7 @@ export const applyLeave = async (req, res) => {
       reason,
     } = req.body;
 
-    if (!hasCapability(req.user.role, CAPABILITIES.LEAVES_APPLY)) {
+    if (isSuperUser(req.user) || !hasCapability(req.user.role, CAPABILITIES.LEAVES_APPLY)) {
       return res.status(403).json({
         success: false,
         error: "You are not allowed to apply for leave",
@@ -198,6 +199,7 @@ export const applyLeave = async (req, res) => {
 
 export const getLeaves = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Use the restricted security console for super-user actions" });
     const leaves = await Leave.find({
       companyId: req.user.companyId,
     })
@@ -232,10 +234,11 @@ export const getLeaves = async (req, res) => {
         return true;
       }
 
-      return canManageRole(
+      return isSuperUser(req.user) || canManageRole(
         req.user.role,
         targetUser.role
       );
+
     });
 
     const formattedLeaves = accessibleLeaves.map(
@@ -275,6 +278,7 @@ export const getLeaves = async (req, res) => {
 
 export const getMyLeaves = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) return res.json({ success: true, leaves: [] });
     const employee = await Employee.findOne({
       userId: req.user._id,
       companyId: req.user.companyId,
@@ -348,10 +352,11 @@ export const getEmployeeLeaves = async (req, res) => {
 
     const canView =
       isSelf ||
-      canManageRole(
+      isSuperUser(req.user) || canManageRole(
         req.user.role,
         targetUser.role
       );
+
 
     if (!canView) {
       return res.status(403).json({
@@ -433,10 +438,11 @@ export const getLeave = async (req, res) => {
 
     const canView =
       isSelf ||
-      canManageRole(
+      isSuperUser(req.user) || canManageRole(
         req.user.role,
         targetUser.role
       );
+
 
     if (!canView) {
       return res.status(403).json({
@@ -462,6 +468,7 @@ export const getLeave = async (req, res) => {
 
 export const updateLeave = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee leave" });
     const {
       leaveType,
       fromDate,
@@ -576,6 +583,7 @@ export const updateLeaveStatus = async (
   res
 ) => {
   try {
+    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee leave" });
     const { id } = req.params;
     const { status } = req.body;
 
@@ -651,6 +659,7 @@ export const updateLeaveStatus = async (
 
 export const deleteLeave = async (req, res) => {
   try {
+    if (isSuperUser(req.user)) return res.status(403).json({ success: false, error: "Super-user accounts do not manage employee leave" });
     const { id } = req.params;
 
     const leave = await Leave.findOne({

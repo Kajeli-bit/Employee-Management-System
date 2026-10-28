@@ -6,7 +6,7 @@ import { Show, SignIn, useClerk, useUser } from "@clerk/react";
 
 import { useAuth } from "../context/useAuth";
 import API_URL from "../api";
-import { isManagementRole } from "../utils/roles";
+import { isManagementUser, isSuperUser } from "../utils/roles";
 import Loader from "../components/common/Loader";
 
 const inputClass =
@@ -93,9 +93,11 @@ const Login = () => {
     }
 
     navigate(
-      isManagementRole(user.role)
-        ? "/admin-dashboard"
-        : "/employee-dashboard",
+      isSuperUser(user)
+        ? "/super-user"
+        : isManagementUser(user)
+          ? "/admin-dashboard"
+          : "/employee-dashboard",
       { replace: true }
     );
   }, [user, loading, navigate]);

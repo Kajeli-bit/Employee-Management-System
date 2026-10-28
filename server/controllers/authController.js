@@ -46,8 +46,8 @@ const register = async (req, res) => {
       });
     }
 
-    // The first person to sign in becomes the Managing Director and sets up the
-    // company. Once a company exists, nobody else can create one.
+  // A standalone super-user has no Employee record and is provisioned only by
+  // the controlled bootstrap flow, never by public first-company registration.
     if (await Company.exists({ head: { $ne: null } })) {
       return res.status(409).json({
         success: false,
@@ -199,11 +199,9 @@ const register = async (req, res) => {
       session,
     });
 
-    // The Managing Director is also an employee so they appear on the
-    // organisation chart and can record attendance. Salary starts at 0 and can
-    // be set like any other employee record.
-    // A claimed company already has its departments, so look them up by key
-    // rather than relying on what this request created.
+    // Company registration continues to create a normal Managing Director
+    // employee record. Super-user provisioning is a distinct server-only path.
+    // A claimed company already has its departments, so look them up by key.
     const mdDepartment = await Department.findOne({
       companyId,
       key: "administration_hr",
@@ -393,6 +391,8 @@ const verify = async (req, res) => {
     success: true,
     user: req.user,
   });
+
+  if (req.user.accountType === "super_user") return;
 
   // Every signed-in page load also moves the automatic clock-out checks along.
   // That keeps a 17:00 close happening even when no employee app is open at the

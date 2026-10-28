@@ -130,10 +130,16 @@ export const roleForDesignation = (designation) =>
 
 export const roleLabel = (role) => getRole(role)?.label || role || "Worker";
 
+export const isSuperUser = (user) => user?.accountType === "super_user";
+
+export const userRoleLabel = (user) => isSuperUser(user) ? "Company Super User" : roleLabel(user?.role);
+
 export const roleLevel = (role) => getRole(role)?.level || 0;
 
 // HR and above run the management console; workers get the self-service portal.
 export const isManagementRole = (role) => roleLevel(role) >= ROLES.hr.level;
+
+export const isManagementUser = (user) => isSuperUser(user) || isManagementRole(user?.role);
 
 export const canManageRole = (actorRole, targetRole) => {
   const actor = getRole(actorRole);
@@ -144,6 +150,9 @@ export const canManageRole = (actorRole, targetRole) => {
 
 export const hasCapability = (role, capability) =>
   Boolean(getRole(role)?.capabilities.includes(capability));
+
+export const hasUserCapability = (user, capability) =>
+  isSuperUser(user) || hasCapability(user?.role, capability);
 
 export const assignableRoles = (actorRole) => {
   const actor = getRole(actorRole);

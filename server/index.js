@@ -17,6 +17,7 @@ import attendanceRouter from "./routes/attendance.js";
 import { runScheduledSweep } from "./controllers/attendanceAutomationController.js";
 import locationRouter from "./routes/locations.js";
 import orgRouter from "./routes/org.js";
+import superUserRouter from "./routes/superUser.js";
 
 import connectToDatabase from "./db/db.js";
 import ensureDatabase from "./db/ensureDatabase.js";
@@ -103,6 +104,7 @@ app.get("/api/health/database", async (req, res) => {
 app.use("/api", ensureDatabase);
 
 // Routes
+app.use("/api/super-user", superUserRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/department", departmentRouter);
 app.use("/api/employee", employeeRouter);
